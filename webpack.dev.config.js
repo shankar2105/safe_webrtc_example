@@ -7,7 +7,8 @@ module.exports = {
   devtool: 'eval',
   entry: [
     'babel-polyfill',
-    './main.js'
+    './main.js',
+    './sass/main.sass'
   ],
   context: path.resolve(__dirname, 'app'),
   output: {
@@ -17,7 +18,6 @@ module.exports = {
   },
   plugins: [
     new webpack.HotModuleReplacementPlugin(),
-    new ExtractTextPlugin({ filename: './styles/style.css', disable: false, allChunks: true }),
   ],
   resolve: {
     extensions: ['.js', '.jsx']
@@ -30,19 +30,16 @@ module.exports = {
       {
         test: /\.js?$/,
         use: ['babel-loader'],
-        include: path.join(__dirname, 'src')
+        include: path.join(__dirname, 'app')
       },
       {
         test: /\.sass$/,
         exclude: /node_modules/,
-        use: ExtractTextPlugin.extract({
-          fallback: 'style-loader',
-          use: [
-            'css-loader',
-            { loader: 'sass-loader', query: { sourceMap: false } },
-          ],
-          publicPath: '../'
-        }),
+        use: [
+          { loader: "style-loader" },
+          { loader: "css-loader" },
+          { loader: 'sass-loader', query: { sourceMap: false } },
+        ],
       },
       // SVG Font
       {
@@ -59,6 +56,44 @@ module.exports = {
       {
         test: /\.(?:ico|gif|png|jpg|jpeg|webp)$/,
         use: 'url-loader',
+      },
+      // WOFF Font
+      {
+        test: /\.woff(\?v=\d+\.\d+\.\d+)?$/,
+        use: {
+          loader: 'url-loader',
+          options: {
+            limit: 10000,
+            mimetype: 'application/font-woff',
+          }
+        },
+      },
+      // WOFF2 Font
+      {
+        test: /\.woff2(\?v=\d+\.\d+\.\d+)?$/,
+        use: {
+          loader: 'url-loader',
+          options: {
+            limit: 10000,
+            mimetype: 'application/font-woff',
+          }
+        }
+      },
+      // TTF Font
+      {
+        test: /\.ttf(\?v=\d+\.\d+\.\d+)?$/,
+        use: {
+          loader: 'url-loader',
+          options: {
+            limit: 10000,
+            mimetype: 'application/octet-stream'
+          }
+        }
+      },
+      // EOT Font
+      {
+        test: /\.eot(\?v=\d+\.\d+\.\d+)?$/,
+        use: 'file-loader',
       }
     ]
   }
