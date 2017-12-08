@@ -11,6 +11,7 @@ export default class ChatRoom extends Component {
 
   constructor() {
     super();
+    this.friendID = null;
     this.offerOptions = CONST.CONFIG.OFFER;
     this.mediaOffer = CONST.CONFIG.MEDIA_OFFER;
     this.originStream = null;
@@ -21,6 +22,9 @@ export default class ChatRoom extends Component {
   }
 
   componentDidMount() {
+    this.friendID = this.props.match.params.friendId;
+    this.props.store.initialiseConnInfo(!!this.friendID);
+
     this.startStream()
       .then(() => this.setupOrigin())
       .then(() => this.setupRemote())
@@ -38,6 +42,10 @@ export default class ChatRoom extends Component {
     if (connInfo.calleeOffer) {
       this.call();
     }
+
+    if(connInfo.callerAnswer) {
+      this.finishConnection();
+    }
   }
 
   startStream() {
@@ -53,9 +61,13 @@ export default class ChatRoom extends Component {
       this.originConn = new window.RTCPeerConnection(CONST.CONFIG.SERVER);
       this.originConn.onicecandidate = (e) => {
         if (!e.candidate) {
-          // this.props.store.sendInvite(this.originCandidates);
-
+          this.props.store.setOfferCandidates(this.originCandidates);
           console.log('offer candidates over')
+          if (!this.friendID) {
+            this.props.store.sendInvite();
+          } else {
+            this.call();
+          }
           return;
         }
         if (!this.originCandidates) {
@@ -80,7 +92,12 @@ export default class ChatRoom extends Component {
 
       this.destConn.onicecandidate = (e) => {
         if (!e.candidate) {
-          this.props.store.calling(this.destCandidates);
+          this.props.store.setAnswerCandidates(this.destCandidates);
+          if (!this.friendID) {
+            this.props.store.calling();
+          } else {
+            this.props.store.acceptInvite();
+          }
           return;
         }
         if (!this.destCandidates) {
@@ -102,10 +119,10 @@ export default class ChatRoom extends Component {
 
   call() {
     const { connInfo } = this.props.store;
-    this.destConn.setRemoteDescription(connInfo.callerOffer)
+    this.destConn.setRemoteDescription(connInfo.calleeOffer)
       .then(() => {
         console.log('set destination remote session success');
-        return Promise.all(connInfo.callerOfferCandidates.map((can) => {
+        return Promise.all(connInfo.calleeOfferCandidates.map((can) => {
           return this.destConn.addIceCandidate(new RTCIceCandidate(can))
             .then(() => {
               console.log('set ICE candidate success');
@@ -171,7 +188,7 @@ export default class ChatRoom extends Component {
 
     switch (connectionState) {
       case CONN_STATE.INIT:
-        connectionMsg = CONN_MSGS.PREPARING_INVITE;
+        connectionMsg = CONN_MSGS.INIT;
         break;
       case CONN_STATE.SEND_INVITE:
         connectionMsg = CONN_MSGS.SEND_INVITE;
@@ -203,10 +220,10 @@ export default class ChatRoom extends Component {
 
   finishConnection() {
     const { connInfo } = this.props.store;
-    this.originConn.setRemoteDescription(connInfo.callerAnswer)
+    this.originConn.setRemoteDescription(connInfo.calleeAnswer)
     .then(() => {
         console.log('set origin remote session success');
-        Promise.all(connInfo.callerAnswerCandidates.map((can) => {
+        Promise.all(connInfo.calleeAnswerCandidates.map((can) => {
           return this.originConn.addIceCandidate(new RTCIceCandidate(can))
             .then(() => {
               console.log('set ICE candidate success');
@@ -224,7 +241,7 @@ export default class ChatRoom extends Component {
   render() {
     const { match } = this.props;
 
-    const friendId = match.params.friendId;
+    // const friendId = match.params.friendId;
 
     return (
       <div className="chat-room">

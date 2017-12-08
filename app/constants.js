@@ -2,7 +2,7 @@ export default {
   UI: {
     DEFAULT_LOADING_DESC: 'Please wait...',
     CONN_MSGS: {
-      PREPARING_INVITE: 'Preparing invite',
+      INIT: 'Initialising connection',
       SEND_INVITE: 'Invite sent. Wait to remote to accept it',
       INVITE_ACCEPTED: 'Invite accepted. Establishing connection with remote',
       CALLING: 'Remote accepted the invite. Establishing connection with remote',

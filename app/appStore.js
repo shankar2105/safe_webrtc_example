@@ -1,7 +1,6 @@
 import {observable, computed, action} from 'mobx';
 import ConnModel from './models/connection';
 import CONST from './constants';
-import { setInterval, clearInterval } from 'timers';
 
 export default class AppStore {
   @observable loading = false;
@@ -35,6 +34,16 @@ export default class AppStore {
   }
 
   checkCallAccepted() {
+    this.timer = setInterval(() => {
+      if (true) {
+        this.connectionState = CONST.CONN_STATE.CONNECTED;
+        clearInterval(this.timer);
+      }
+    }, CONST.UI.CONN_TIMER_INTERVAL);
+  }
+
+
+  checkForCalling() {
     this.timer = setInterval(() => {
       if (true) {
         this.connectionState = CONST.CONN_STATE.CONNECTED;
@@ -89,9 +98,16 @@ export default class AppStore {
   }
 
   @action
+  initialiseConnInfo(isCaller) {
+    return new Promise((resolve) => {
+      const userPosition = isCaller ? CONST.USER_POSITION.CALLER : CONST.USER_POSITION.CALLEE;
+      // get caller offer if invited
+      this.connInfo = new ConnModel(this.selectedPubName, userPosition);
+    });
+  }
+
+  @action
   setOffer(offer, isCaller) {
-    const userPosition = isCaller ? CONST.USER_POSITION.CALLER : CONST.USER_POSITION.CALLEE;
-    this.connInfo = new ConnModel(this.selectedPubName, userPosition);
     this.connInfo.setOffer(offer);
   }
 
@@ -101,40 +117,50 @@ export default class AppStore {
   }
 
   @action
-  sendInvite(candidates) {
+  setOfferCandidates(candidates) {
+    this.connInfo.setOfferCandidates(candidates);
+  }
+
+  @action
+  setAnswerCandidates(candidates) {
+    this.connInfo.setAnswerCandidates(candidates);
+  }
+
+  @action
+  sendInvite() {
     return new Promise((resolve) => {
       if (!this.connInfo) {
         return;
       }
-      this.connInfo.setOfferCandidates(candidates);
       this.connectionState = CONST.CONN_STATE.SEND_INVITE;
+      // update data
       this.checkInviteAccepted();
       resolve();
     });
   }
 
   @action
-  calling(candidates) {
+  acceptInvite() {
     return new Promise((resolve) => {
       if (!this.connInfo) {
         return;
       }
-      this.connInfo.setAnswerCandidates(candidates);
+      this.connectionState = CONST.CONN_STATE.INVITE_ACCEPTED;
+      // update data
+      this.checkForCalling();
+      resolve();
+    });
+  }
+
+  @action
+  calling() {
+    return new Promise((resolve) => {
+      if (!this.connInfo) {
+        return;
+      }
       this.connectionState = CONST.CONN_STATE.CALLING;
+      // update data
       this.checkCallAccepted();
-      resolve();
-    });
-  }
-
-  @action
-  getRemoteInvite(candidates) {
-    return new Promise((resolve) => {
-      if (!this.connInfo) {
-        return;
-      }
-      this.connInfo.setOfferCandidates(candidates);
-      this.connectionState = CONST.CONN_STATE.SEND_INVITE;
-      this.checkInviteAccepted();
       resolve();
     });
   }
