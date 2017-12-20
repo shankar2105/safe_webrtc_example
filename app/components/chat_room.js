@@ -24,7 +24,7 @@ export default class ChatRoom extends Component {
   componentDidMount() {
     this.friendID = this.props.match.params.friendId;
     this.props.store.initialiseConnInfo(!!this.friendID);
-
+    console.log('init')
     this.startStream()
       .then(() => this.setupOrigin())
       .then(() => this.setupRemote())
@@ -49,10 +49,12 @@ export default class ChatRoom extends Component {
   }
 
   startStream() {
+    console.log('origin streaming yet to started')
     return window.navigator.mediaDevices.getUserMedia(this.mediaOffer)
       .then((stream) => {
         this.originStream = stream;
         this.origin.srcObject = stream;
+        console.log('origin streaming started')
       });
   }
 

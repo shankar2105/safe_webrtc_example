@@ -1,6 +1,9 @@
-import {observable, computed, action} from 'mobx';
+import { observable, computed, action } from 'mobx';
+import 'babel-polyfill';
+
 import ConnModel from './models/connection';
 import CONST from './constants';
+import SafeApi from './safe_comm';
 
 export default class AppStore {
   @observable loading = false;
@@ -8,12 +11,15 @@ export default class AppStore {
   @observable loaderDesc = CONST.UI.DEFAULT_LOADING_DESC;
   @observable publicNames = [];
   @observable invites = [];
-  @observable selectedPubName = 'PublicID1';
+  @observable selectedPubName = '';
   @observable connectionState = CONST.CONN_STATE.INIT;
   @observable connInfo = {};
+  @observable isNwConnected = true;
+  @observable isNwConnecting = false;
 
   constructor() {
     this.timer = null;
+    this.api = null;
   }
 
   setLoader(state, desc) {
@@ -53,15 +59,47 @@ export default class AppStore {
   }
 
   @action
-  fetchPublicNames() {
-    return new Promise((resolve) => {
-      this.setLoader(true, 'Fetching public names');
-      this.publicNames = ['PublicID1', 'PublicID2', 'PublicID3'];
+  nwStateCb(newState) {
+    if (newState === CONST.NET_STATE.CONNECTED) {
+      this.isNwConnected = true;
+      return;
+    }
+    this.isNwConnected = false;
+  }
 
-      setTimeout(() => {
+  @action
+  authorisation() {
+    return new Promise(async (resolve, reject) => {
+      try {
+        this.setLoader(true, 'Authorising application');
+        this.api = new SafeApi(this.nwStateCb);
+        await this.api.authorise();
         this.setLoader(false);
+        console.log('authorised');
         resolve();
-      }, 2000);
+      } catch(err) {
+        console.error(`Authorisation error :: ${err}`);
+      }
+    });
+  }
+
+  @action
+  fetchPublicNames() {
+    return new Promise(async (resolve, reject) => {
+      try {
+        this.setLoader(true, 'Fetching public names');
+        this.publicNames = await this.api.getPublicNames();
+        console.log('this.publicNames', this.publicNames);
+        if (this.publicNames.length !== 0 && !this.selectedPubName) {
+          console.log('setting up')
+          this.setLoader(true, 'Initializing');
+          this.selectedPubName = this.publicNames[0];
+          await this.api.setupPublicName(this.selectedPubName);
+        }
+        this.setLoader(false);
+      } catch(err) {
+        console.error(`Fetch publicNames error :: ${err}`);
+      }
     });
   }
 
@@ -75,12 +113,6 @@ export default class AppStore {
         resolve();
       }, 2000);
     });
-  }
-
-  @action
-  initialise() {
-    return this.fetchPublicNames()
-      .then(() => this.fetchInvites());
   }
 
   @action

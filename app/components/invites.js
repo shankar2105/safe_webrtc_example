@@ -10,6 +10,7 @@ import Loader from './loader';
 export default class Invites extends Component {
   onClickInvite(invite) {
     console.log('invite selected', invite);
+    this.props.history.push(`chat-room/${invite}`);
   }
   render() {
     const { store, history } = this.props;

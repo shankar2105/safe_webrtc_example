@@ -7,6 +7,11 @@ import WebrtcLogo from '../images/logo.png';
 @inject("store")
 @observer
 export default class App extends Component {
+  componentDidMount() {
+    this.props.store.authorisation()
+      .then(() => this.props.store.fetchPublicNames())
+  }
+
   render() {
     return (
       <div className="root-b">

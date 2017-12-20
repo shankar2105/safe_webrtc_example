@@ -40,4 +40,30 @@ export default {
     CALLING: 'CALLING',
     CONNECTED: 'CONNECTED',
   },
+  NET_STATE: {
+    INIT: 'Init',
+    DISCONNECTED: 'Disconnected',
+    CONNECTED: 'Connected',
+    UNKNOWN: 'Unknown',
+  },
+  PERMISSIONS: {
+    READ: 'Read',
+    INSERT: 'Insert',
+    UPDATE: 'Update',
+  },
+  MD_KEY: '@webrtcSignalSample',
+  SELECTED_PUB_NAME_KEY: 'selected_pub_name',
+  TYPE_TAG: {
+    CHANNEL: 15005,
+    DNS: 15001,
+  },
+  ERR_CODE: {
+    NO_SUCH_ENTRY: -106,
+  },
+  CRYPTO_KEYS: {
+    SEC_SIGN_KEY: '__SEC_SIGN_KEY__',
+    PUB_SIGN_KEY: '__PUB_SIGN_KEY__',
+    SEC_ENC_KEY: '__SEC_ENC_KEY__',
+    PUB_ENC_KEY: '__PUB_ENC_KEY__',
+  },
 };

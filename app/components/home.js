@@ -8,12 +8,16 @@ import Loader from './loader';
 @inject("store")
 @observer
 export default class Home extends Component {
-  componentDidMount() {
-    this.props.store.initialise();
-  }
-
   componentWillUnmount() {
     this.props.store.reset();
+  }
+
+  noPublicNameContainer() {
+    return (
+      <div className="base">
+        <h3 className="no-pub-name">No Public Name found. Please create one to start using this application.</h3>
+      </div>
+    )
   }
 
   render() {
@@ -21,6 +25,11 @@ export default class Home extends Component {
 
     if (store.loading) {
       return <Loader desc={store.loaderDesc} />;
+    }
+
+    // if no public name found
+    if (store.publicNames.length === 0) {
+      return this.noPublicNameContainer();
     }
 
     return (
