@@ -23,7 +23,7 @@ export default class ChatRoom extends Component {
 
   componentDidMount() {
     this.friendID = this.props.match.params.friendId;
-    this.props.store.initialiseConnInfo(!!this.friendID);
+    this.props.store.initialiseConnInfo(this.friendID);
     console.log('init')
     this.startStream()
       .then(() => this.setupOrigin())
@@ -38,12 +38,12 @@ export default class ChatRoom extends Component {
 
   componentDidUpdate() {
     const { connInfo } = this.props.store;
-    console.log('update', this.props.store.connInfo)
-    if (connInfo.calleeOffer) {
+    console.log('update', connInfo);
+    if (connInfo.remoteOffer) {
       this.call();
     }
 
-    if(connInfo.callerAnswer) {
+    if(connInfo.answer) {
       this.finishConnection();
     }
   }
@@ -98,6 +98,7 @@ export default class ChatRoom extends Component {
           if (!this.friendID) {
             this.props.store.calling();
           } else {
+            // FIXME check this.friendID exists
             this.props.store.acceptInvite();
           }
           return;
@@ -121,10 +122,11 @@ export default class ChatRoom extends Component {
 
   call() {
     const { connInfo } = this.props.store;
-    this.destConn.setRemoteDescription(connInfo.calleeOffer)
+    this.destConn.setRemoteDescription(connInfo.remoteOffer)
       .then(() => {
         console.log('set destination remote session success');
-        return Promise.all(connInfo.calleeOfferCandidates.map((can) => {
+        console.log('chat room :: ', connInfo);
+        return Promise.all(connInfo.remoteOfferCandidates.map((can) => {
           return this.destConn.addIceCandidate(new RTCIceCandidate(can))
             .then(() => {
               console.log('set ICE candidate success');
@@ -221,11 +223,11 @@ export default class ChatRoom extends Component {
   }
 
   finishConnection() {
-    const { connInfo } = this.props.store;
-    this.originConn.setRemoteDescription(connInfo.calleeAnswer)
+    const { connInfo, connected } = this.props.store;
+    this.originConn.setRemoteDescription(connInfo.remoteAnswer)
     .then(() => {
         console.log('set origin remote session success');
-        Promise.all(connInfo.calleeAnswerCandidates.map((can) => {
+        Promise.all(connInfo.remoteAnswerCandidates.map((can) => {
           return this.originConn.addIceCandidate(new RTCIceCandidate(can))
             .then(() => {
               console.log('set ICE candidate success');
@@ -233,7 +235,7 @@ export default class ChatRoom extends Component {
               console.error('set ICE candidate failed ::', err);
             });
         })).then(() => {
-          this.connectionState = CONST.CONN_STATE.CONNECTED;
+          connected();
         });
       }, (err) => {
         console.error('set origin remote session failed ::', err);

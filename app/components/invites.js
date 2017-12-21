@@ -8,10 +8,15 @@ import Loader from './loader';
 @inject("store")
 @observer
 export default class Invites extends Component {
+  componentWillMount() {
+    this.props.store.fetchInvites();
+  }
+
   onClickInvite(invite) {
     console.log('invite selected', invite);
     this.props.history.push(`chat-room/${invite}`);
   }
+
   render() {
     const { store, history } = this.props;
 
@@ -23,7 +28,7 @@ export default class Invites extends Component {
       <div className="base">
         <SelectedPubID pubId={store.selectedPubName} history={history} />
         <div className="invites">
-          <h3 className="title">You have 3 invite(s)</h3>
+          <h3 className="title">You have {store.invites.length} invite(s)</h3>
           <div className="invites-ls">
             {
               store.invites.map((invite, i) => {

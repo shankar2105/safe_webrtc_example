@@ -53,6 +53,7 @@ export default {
   },
   MD_KEY: '@webrtcSignalSample',
   SELECTED_PUB_NAME_KEY: 'selected_pub_name',
+  MD_META_KEY: '_metadata',
   TYPE_TAG: {
     CHANNEL: 15005,
     DNS: 15001,

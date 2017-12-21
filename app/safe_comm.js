@@ -29,6 +29,7 @@ export default class SafeApi {
     this.pubNameCntr = null;
     this.serviceCntr = null;
     this.channelMD = null;
+    this.remoteChannelMD = null;
     this.selectedPubName = null;
     this.nwStateCb = (newState) => {
       nwStateCb(newState);
@@ -135,7 +136,7 @@ export default class SafeApi {
         const result = await window.safeMutableDataPermissions.getPermissionsSet(perms, appSignKey);
 
         resolve(true);
-      } catch(err) {
+      } catch (err) {
         console.log('service container permission', err);
         if (err.code !== -1011) {
           return reject(err);
@@ -234,10 +235,10 @@ export default class SafeApi {
           console.log('channelSerial', channelSerial)
           this.channelMD = await window.safeMutableData.fromSerial(this.app, channelSerial.buf);
 
-          const entriesHandle = await window.safeMutableData.getEntries(this.channelMD);
-          await window.safeMutableDataEntries.forEach(entriesHandle, (k, v) => {
-            console.log('Entries :: ', k, k.toString(), v.buf.toString());
-          });
+          // const entriesHandle = await window.safeMutableData.getEntries(this.channelMD);
+          // await window.safeMutableDataEntries.forEach(entriesHandle, (k, v) => {
+          //   console.log('Entries :: ', k, k.toString(), v.buf.toString());
+          // });
           console.log('channel already exists');
         } catch (e) {
           console.log('channel not found', e.code);
@@ -246,6 +247,172 @@ export default class SafeApi {
           }
           await this._createChannel();
         }
+        resolve(true);
+      } catch (err) {
+        reject(err);
+      }
+    });
+  }
+
+  fetchInvites() {
+    return new Promise(async (resolve, reject) => {
+      try {
+        if (!this.channelMD) {
+          return reject(new Error('channel handle is empty'));
+        }
+        const whiteListKeys = [
+          CONST.CRYPTO_KEYS.PUB_ENC_KEY,
+          CONST.CRYPTO_KEYS.SEC_ENC_KEY,
+          CONST.CRYPTO_KEYS.PUB_SIGN_KEY,
+          CONST.CRYPTO_KEYS.SEC_SIGN_KEY,
+          CONST.MD_META_KEY
+        ];
+        const invites = [];
+        const entriesHandle = await window.safeMutableData.getEntries(this.channelMD);
+        await window.safeMutableDataEntries.forEach(entriesHandle, (k, v) => {
+          const keyStr = k.toString();
+          if (!whiteListKeys.includes(keyStr)) {
+            invites.push(keyStr);
+            console.log('Entries :: ', k, k.toString(), v.buf.toString());
+          }
+        });
+        resolve(invites);
+      } catch (err) {
+        reject(err);
+      }
+    });
+  }
+
+  connect(friendID) {
+    return new Promise(async (resolve, reject) => {
+      try {
+        if (!friendID) {
+          return reject(new Error('Friend ID was empty'));
+        }
+        const pubNameSha = await window.safeCrypto.sha3Hash(this.app, friendID);
+        const fdPubNameCntr = await window.safeMutableData.newPublic(this.app, pubNameSha, CONST.TYPE_TAG.DNS);
+
+        const encChannelKey = await window.safeMutableData.encryptKey(fdPubNameCntr, CONST.MD_KEY);
+        const fdChannelSerial = await window.safeMutableData.get(fdPubNameCntr, encChannelKey);
+        console.log('channelSerial', fdChannelSerial)
+        this.remoteChannelMD = await window.safeMutableData.fromSerial(this.app, fdChannelSerial.buf);
+        console.log('fd channel exist', this.remoteChannelMD);
+        resolve(true);
+      } catch (err) {
+        reject(err);
+      }
+    });
+  }
+
+  putConnInfo(connInfo) {
+    return new Promise(async (resolve, reject) => {
+      console.log('put conn info', connInfo);
+      try {
+        const channelMD = (connInfo.persona === CONST.USER_POSITION.CALLER) ? this.remoteChannelMD : this.channelMD;
+
+        if (!channelMD) {
+          return reject(new Error('channel not set'));
+        }
+        const entriesHandle = await window.safeMutableData.getEntries(channelMD);
+        const mutationHandle = await window.safeMutableDataEntries.mutate(entriesHandle);
+        // const encryptedKey = await window.safeMutableData.encryptKey(this.remoteChannelMD, CONST.MD_KEY);
+        try {
+          const connStr = await window.safeMutableData.get(channelMD, connInfo.callerID);
+          console.log('connStr', connStr);
+
+          await window.safeMutableDataMutation.update(mutationHandle, connInfo.callerID, connInfo.stringify(), connStr.version + 1);
+          console.log('updateed into channel')
+        } catch (err) {
+          console.log('insert into channel', err)
+          console.log('insert into channel 1', mutationHandle, connInfo.callerID, connInfo.stringify())
+          await window.safeMutableDataMutation.insert(mutationHandle, connInfo.callerID, connInfo.stringify());
+        }
+        await window.safeMutableData.applyEntriesMutation(channelMD, mutationHandle);
+        window.safeMutableDataMutation.free(mutationHandle);
+        window.safeMutableDataEntries.free(entriesHandle);
+        resolve(true);
+      } catch (err) {
+        reject(err);
+      }
+    });
+  }
+
+  fetchConnInfo(connInfo) {
+    return new Promise(async (resolve, reject) => {
+      console.log('fetch info', connInfo)
+      try {
+        const channelMD = (connInfo.persona === CONST.USER_POSITION.CALLER) ? this.remoteChannelMD : this.channelMD;
+
+        if (!channelMD) {
+          return reject(new Error('channel not set'));
+        }
+        const connStr = await window.safeMutableData.get(channelMD, connInfo.callerID);
+        console.log('fetched info', connStr.buf)
+        resolve(connStr.buf.toString());
+      } catch (err) {
+        reject(err);
+      }
+    });
+  }
+
+  sendInvite(connInfo) {
+    return new Promise(async (resolve, reject) => {
+      try {
+        console.log('send invite', this, connInfo);
+        if (!this.remoteChannelMD) {
+          return reject(new Error('remote channel not set'));
+        }
+        await this.putConnInfo(connInfo);
+        console.log('invite sent');
+        resolve(true);
+      } catch (err) {
+        reject(err);
+      }
+    });
+  }
+
+  acceptInvite(connInfo) {
+    return new Promise(async (resolve, reject) => {
+      console.log('invite accepted', connInfo);
+      try {
+        if (!this.channelMD) {
+          return reject(new Error('channel handle is empty'));
+        }
+        await this.putConnInfo(connInfo);
+        console.log('accpected invite');
+        resolve(true);
+      } catch (err) {
+        reject(err);
+      }
+    });
+  }
+
+  calling(connInfo) {
+    return new Promise(async (resolve, reject) => {
+      try {
+        console.log('calling', connInfo);
+        if (!this.remoteChannelMD) {
+          return reject(new Error('channel handle is empty'));
+        }
+        await this.putConnInfo(connInfo);
+        console.log('calling');
+        resolve(true);
+      } catch (err) {
+        reject(err);
+      }
+    });
+  }
+
+
+  connected(connInfo) {
+    return new Promise(async (resolve, reject) => {
+      try {
+        console.log('connected', connInfo);
+        if (!this.channelMD) {
+          return reject(new Error('channel handle is empty'));
+        }
+        await this.putConnInfo(connInfo);
+        console.log('calling');
         resolve(true);
       } catch (err) {
         reject(err);

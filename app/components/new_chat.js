@@ -8,9 +8,17 @@ import Loader from './loader';
 @inject("store")
 @observer
 export default class NewChat extends Component {
+  componentWillUpdate() {
+    console.log('new chat loaded', this.props.store.loaded);
+    if (this.props.store.loaded) {
+      this.props.history.push('chat-room');
+    }
+  }
+
   onNewChatSubmit(e) {
     e.preventDefault();
     console.log('Friend ID', this.friendID.value)
+    this.props.store.connect(this.friendID.value);
   }
 
   render() {

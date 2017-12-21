@@ -1,95 +1,111 @@
+import { observable, action } from 'mobx';
 import CONST from '../constants';
 
 export default class Connection {
+  @observable callerID = null;
+  @observable persona = null;
+  @observable state = null;
+  @observable offer = null;
+  @observable answer = null;
+  @observable offerCandidates = [];
+  @observable answerCandidates = [];
+  @observable remoteOffer = null;
+  @observable remoteAnswer = null;
+  @observable remoteOfferCandidates = [];
+  @observable remoteAnswerCandidates = [];
   constructor(id, persona) {
     this.callerID = id;
     this.persona = persona;
-    this.state = null;
-    this.callerOffer = null;
-    this.callerAnswer = null;
-    this.callerOfferCandidates = [];
-    this.callerAnswerCandidates = [];
-    this.calleeOffer = null;
-    this.calleeAnswer = null;
-    this.calleeOfferCandidates = [];
-    this.calleeAnswerCandidates = [];
+  }
+
+  toJson() {
+    const isCaller = (this.persona === CONST.USER_POSITION.CALLER);
+    const obj = {};
+    obj['initiater'] = this.callerID;
+    obj['state'] = this.state;
+    obj['caller'] = {};
+    obj['callee'] = {};
+    obj.caller['offer'] = isCaller ? this.offer : this.remoteOffer;
+    obj.caller['offerCandidates'] = isCaller ? this.offerCandidates : this.remoteOfferCandidates;
+    obj.caller['answer'] = isCaller ? this.answer : this.remoteAnswer;
+    obj.caller['answerCandidates'] = isCaller ? this.answerCandidates : this.remoteAnswerCandidates;
+    obj.callee['offer'] = isCaller ? this.remoteOffer : this.offer;
+    obj.callee['offerCandidates'] = isCaller ? this.remoteOfferCandidates : this.offerCandidates;
+    obj.callee['answer'] = isCaller ? this.remoteAnswer : this.answer;
+    obj.callee['answerCandidates'] = isCaller ? this.remoteAnswerCandidates : this.answerCandidates;
+    return obj;
   }
 
   stringify() {
-    return JSON.stringify({
-      state: this.state,
-      caller: {
-        offer: this.callerOffer,
-        answer: this.callerAnswer
-      },
-      callee: {
-        offer: this.calleeOffer,
-        answer: this.calleeAnswer
-      }
-    });
+    const jsonObj = this.toJson();
+    return JSON.stringify(jsonObj);
   }
 
+  @action
+  setState(state) {
+    this.state = state;
+  }
+
+  @action
+  setID(id) {
+    this.callerID = id;
+  }
+
+  @action
   setOffer(offer) {
-    if (this.persona === CONST.USER_POSITION.CALLER) {
-      this.callerOffer = offer;
-      return;
-    }
-    this.calleeOffer = offer;
+    this.offer = offer;
   }
 
+  @action
   setAnswer(answer) {
-    if (this.persona === CONST.USER_POSITION.CALLER) {
-      this.callerAnswer = answer;
-      return;
-    }
-    this.calleeAnswer = answer;
+    this.answer = answer;
   }
 
+  @action
   setOfferCandidates(candidates) {
-    if (this.persona === CONST.USER_POSITION.CALLER) {
-      this.callerOfferCandidates = candidates;
-      return;
-    }
-    this.calleeOfferCandidates = candidates;
+    this.offerCandidates = candidates;
   }
 
+  @action
   setAnswerCandidates(candidates) {
-    if (this.persona === CONST.USER_POSITION.CALLER) {
-      this.callerAnswerCandidates = candidates;
-      return;
-    }
-    this.calleeAnswerCandidates = candidates;
+    this.answerCandidates = candidates;
   }
 
+  @action
   setRemoteOffer(offer) {
-    if (this.persona === CONST.USER_POSITION.CALLER) {
-      this.calleeOffer = offer;
-      return;
-    }
-    this.callerOffer = offer;
+    this.remoteOffer = offer;
   }
 
+  @action
   setRemoteAnswer(answer) {
-    if (this.persona === CONST.USER_POSITION.CALLER) {
-      this.calleeAnswer = answer;
-      return;
-    }
-    this.callerAnswer = answer;
+    this.remoteAnswer = answer;
   }
 
+  @action
   setRemoteOfferCandidates(candidates) {
-    if (this.persona === CONST.USER_POSITION.CALLEE) {
-      this.calleeOfferCandidates = candidates;
-      return;
-    }
-    this.callerOfferCandidates = candidates;
+    this.remoteOfferCandidates = candidates;
   }
 
+  @action
   setRemoteAnswerCandidates(candidates) {
-    if (this.persona === CONST.USER_POSITION.CALLEE) {
-      this.calleeAnswerCandidates = candidates;
-      return;
-    }
-    this.callerAnswerCandidates = candidates;
+    this.remoteAnswerCandidates = candidates;
+  }
+
+  static parseJson(jsonStr) {
+    const obj = {};
+    const parsedObj = JSON.parse(jsonStr);
+    obj['initiater'] = parsedObj.initiater;
+    obj['state'] = parsedObj.state;
+    obj['caller'] = {};
+    obj['callee'] = {};
+    obj.caller['offer'] = parsedObj.caller.offer;
+    obj.caller['offerCandidates'] = parsedObj.caller.offerCandidates;
+    obj.caller['answer'] = parsedObj.caller.answer;
+    obj.caller['answerCandidates'] = parsedObj.caller.answerCandidates;
+    obj.callee['offer'] = parsedObj.callee.offer;
+    obj.callee['offerCandidates'] = parsedObj.callee.offerCandidates;
+    obj.callee['answer'] = parsedObj.callee.answer;
+    obj.callee['answerCandidates'] = parsedObj.callee.answerCandidates;
+    return obj;
   }
 }

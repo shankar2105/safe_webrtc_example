@@ -1,4 +1,4 @@
-import { observable, computed, action } from 'mobx';
+import { observable, computed, action, autorun } from 'mobx';
 import 'babel-polyfill';
 
 import ConnModel from './models/connection';
@@ -18,44 +18,75 @@ export default class AppStore {
   @observable isNwConnecting = false;
 
   constructor() {
-    this.timer = null;
     this.api = null;
   }
 
-  setLoader(state, desc) {
-    this.loaded = false;
+  timeout(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  setLoader(state, desc, isloaded) {
+    this.loaded = !!isloaded;
     this.loading = state;
     this.loaderDesc = desc || CONST.UI.DEFAULT_LOADING_DESC;
   }
 
   checkInviteAccepted() {
-    this.timer = setInterval(() => {
-      if (true) {
-        this.connInfo.setRemoteOffer('remote offer');
-        this.connInfo.setRemoteAnswer('remote answer');
-        this.connectionState = CONST.CONN_STATE.CALLING;
-        clearInterval(this.timer);
+    return new Promise(async (resolve, reject) => {
+      try {
+        const connStr = await this.api.fetchConnInfo(this.connInfo);
+        console.log('check invted accpedyed', connStr);
+        const parsedConnInfo = ConnModel.parseJson(connStr);
+        if (parsedConnInfo.state === CONST.CONN_STATE.INVITE_ACCEPTED) {
+          this.connInfo.setRemoteOffer(parsedConnInfo.callee.offer);
+          this.connInfo.setRemoteOfferCandidates(parsedConnInfo.callee.offerCandidates);
+          this.connInfo.setRemoteAnswer(parsedConnInfo.callee.answer);
+          this.connInfo.setRemoteAnswerCandidates(parsedConnInfo.callee.answerCandidates);
+          autorun(() => console.log('invite accepted'));
+          return resolve(true);
+        }
+        await this.timeout(CONST.UI.CONN_TIMER_INTERVAL);
+        this.checkInviteAccepted();
+      } catch (err) {
+        reject(err);
       }
-    }, CONST.UI.CONN_TIMER_INTERVAL);
+    });
   }
 
   checkCallAccepted() {
-    this.timer = setInterval(() => {
-      if (true) {
-        this.connectionState = CONST.CONN_STATE.CONNECTED;
-        clearInterval(this.timer);
+    return new Promise(async (resolve, reject) => {
+      try {
+        const connStr = await this.api.fetchConnInfo(this.connInfo);
+        const parsedConnInfo = ConnModel.parseJson(connStr);
+        if (parsedConnInfo.state === CONST.CONN_STATE.CONNECTED) {
+          this.connectionState = CONST.CONN_STATE.CONNECTED;
+          return resolve(true);
+        }
+        await this.timeout(CONST.UI.CONN_TIMER_INTERVAL);
+        this.checkCallAccepted();
+      } catch (err) {
+        reject(err);
       }
-    }, CONST.UI.CONN_TIMER_INTERVAL);
+    });
   }
 
 
   checkForCalling() {
-    this.timer = setInterval(() => {
-      if (true) {
-        this.connectionState = CONST.CONN_STATE.CONNECTED;
-        clearInterval(this.timer);
+    return new Promise(async (resolve, reject) => {
+      try {
+        const connStr = await this.api.fetchConnInfo(this.connInfo);
+        const parsedConnInfo = ConnModel.parseJson(connStr);
+        if (parsedConnInfo.state === CONST.CONN_STATE.CALLING) {
+          this.connInfo.setRemoteAnswer(parsedConnInfo.caller.answer);
+          this.connInfo.setRemoteAnswerCandidates(parsedConnInfo.caller.answerCanditates);
+          return resolve(true);
+        }
+        await this.timeout(CONST.UI.CONN_TIMER_INTERVAL);
+        this.checkForCalling();
+      } catch (err) {
+        reject(err);
       }
-    }, CONST.UI.CONN_TIMER_INTERVAL);
+    });
   }
 
   @action
@@ -76,8 +107,8 @@ export default class AppStore {
         await this.api.authorise();
         this.setLoader(false);
         console.log('authorised');
-        resolve();
-      } catch(err) {
+        resolve(true);
+      } catch (err) {
         console.error(`Authorisation error :: ${err}`);
       }
     });
@@ -97,7 +128,7 @@ export default class AppStore {
           await this.api.setupPublicName(this.selectedPubName);
         }
         this.setLoader(false);
-      } catch(err) {
+      } catch (err) {
         console.error(`Fetch publicNames error :: ${err}`);
       }
     });
@@ -105,13 +136,15 @@ export default class AppStore {
 
   @action
   fetchInvites() {
-    return new Promise((resolve) => {
-      this.setLoader(true, 'Fetching invites');
-      this.invites = ['Invite1', 'Invite2', 'Invite3'];
-      setTimeout(() => {
+    return new Promise(async (resolve, reject) => {
+      try {
+        this.setLoader(true, 'Fetching invites');
+        this.invites = await this.api.fetchInvites();
         this.setLoader(false);
-        resolve();
-      }, 2000);
+        resolve(true);
+      } catch (err) {
+        console.error('Fetch invites :: ', err);
+      }
     });
   }
 
@@ -120,8 +153,12 @@ export default class AppStore {
     if (!pubName || !this.publicNames.includes(pubName)) {
       return;
     }
-    this.selectedPubName = pubName;
-    this.loaded = true;
+    return new Promise(async (resolve, reject) => {
+      this.setLoader(true, `Activating selected ${pubName}`);
+      this.selectedPubName = pubName;
+      await this.api.setupPublicName(this.selectedPubName);
+      this.setLoader(false, null, true);
+    });
   }
 
   @action
@@ -130,11 +167,24 @@ export default class AppStore {
   }
 
   @action
-  initialiseConnInfo(isCaller) {
-    return new Promise((resolve) => {
-      const userPosition = isCaller ? CONST.USER_POSITION.CALLER : CONST.USER_POSITION.CALLEE;
-      // get caller offer if invited
-      this.connInfo = new ConnModel(this.selectedPubName, userPosition);
+  initialiseConnInfo(friendID) {
+    return new Promise(async(resolve, reject) => {
+      try {
+        const isCallee = !!friendID;
+        const userPosition = isCallee ? CONST.USER_POSITION.CALLEE : CONST.USER_POSITION.CALLER;
+        this.connInfo = new ConnModel(this.selectedPubName, userPosition);
+        if (isCallee) {
+          this.connInfo.setID(friendID);
+          const connInfoStr = await this.api.fetchConnInfo(this.connInfo);
+          const parsedJson = ConnModel.parseJson(connInfoStr);
+          this.connInfo.setRemoteOffer(parsedJson.caller.offer);
+          this.connInfo.setRemoteOfferCandidates(parsedJson.caller.offerCandidates);
+          console.log('conn init :: ', this.connInfo);
+        }
+        resolve(true);
+      } catch (err) {
+        console.error('Initialise connInfo error :: ', err);
+      }
     });
   }
 
@@ -158,42 +208,97 @@ export default class AppStore {
     this.connInfo.setAnswerCandidates(candidates);
   }
 
+  // connInfo with caller offer and offer candidates
   @action
   sendInvite() {
-    return new Promise((resolve) => {
-      if (!this.connInfo) {
-        return;
+    return new Promise(async (resolve, reject) => {
+      try {
+        if (!this.connInfo) {
+          throw new Error('Connection info not set');
+        }
+        // FIXME remove this.connectionState and handle with connInfo.state
+        this.connectionState = CONST.CONN_STATE.SEND_INVITE;
+        this.connInfo.setState(this.connectionState);
+        await this.api.sendInvite(this.connInfo);
+        // update data
+        this.checkInviteAccepted();
+        resolve(true);
+      } catch (err) {
+        console.error('Send invite error :: ', err);
       }
-      this.connectionState = CONST.CONN_STATE.SEND_INVITE;
-      // update data
-      this.checkInviteAccepted();
-      resolve();
     });
   }
 
+  // connInfo with caller offer and offer candidates
+  // and callee offer and offer candidates with answer and answer candidates
   @action
   acceptInvite() {
-    return new Promise((resolve) => {
-      if (!this.connInfo) {
-        return;
+    return new Promise(async (resolve, reject) => {
+      try {
+        if (!this.connInfo) {
+          return;
+        }
+        this.connectionState = CONST.CONN_STATE.INVITE_ACCEPTED;
+        this.connInfo.setState(this.connectionState);
+        await this.api.acceptInvite(this.connInfo);
+        // update data
+        this.checkForCalling();
+        resolve(true);
+      } catch (err) {
+        console.error('Accept invite error :: ', err);
       }
-      this.connectionState = CONST.CONN_STATE.INVITE_ACCEPTED;
-      // update data
-      this.checkForCalling();
-      resolve();
+    });
+  }
+
+  // connInfo with callee answer and candidates
+  @action
+  calling() {
+    return new Promise(async (resolve) => {
+      try {
+        if (!this.connInfo) {
+          return resolve();
+        }
+        this.connectionState = CONST.CONN_STATE.CALLING;
+        this.connInfo.setState(this.connectionState);
+        await this.api.calling(this.connInfo);
+        // update data
+        this.checkCallAccepted();
+        resolve(true);
+      } catch (err) {
+        console.error('Calling error :: ', err);
+      }
     });
   }
 
   @action
-  calling() {
-    return new Promise((resolve) => {
-      if (!this.connInfo) {
-        return;
+  connect(friendID) {
+    return new Promise(async (resolve, reject) => {
+      try {
+        this.setLoader(true, `Connecting to ${friendID}`);
+        await this.api.connect(friendID);
+        this.setLoader(false, null, true);
+        resolve(true);
+      } catch (err) {
+        console.log('Connect error :: ', err);
       }
-      this.connectionState = CONST.CONN_STATE.CALLING;
-      // update data
-      this.checkCallAccepted();
-      resolve();
+    });
+  }
+
+  connected() {
+    return new Promise(async (resolve) => {
+      try {
+        if (!this.connInfo) {
+          return resolve();
+        }
+        this.connectionState = CONST.CONN_STATE.CONNECTED;
+        this.connInfo.setState(this.connectionState);
+        await this.api.connected(this.connInfo);
+        // update data
+        this.checkCallAccepted();
+        resolve(true);
+      } catch (err) {
+        console.log('Connected error :: ', err);
+      }
     });
   }
 }
