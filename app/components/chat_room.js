@@ -39,11 +39,11 @@ export default class ChatRoom extends Component {
   componentDidUpdate() {
     const { connInfo } = this.props.store;
     console.log('update', connInfo);
-    if (connInfo.remoteOffer) {
+    if (connInfo.get('remoteOffer')) {
       this.call();
     }
 
-    if(connInfo.answer) {
+    if(connInfo.get('answer')) {
       this.finishConnection();
     }
   }
@@ -122,11 +122,11 @@ export default class ChatRoom extends Component {
 
   call() {
     const { connInfo } = this.props.store;
-    this.destConn.setRemoteDescription(connInfo.remoteOffer)
+    this.destConn.setRemoteDescription(connInfo.get('remoteOffer'))
       .then(() => {
         console.log('set destination remote session success');
         console.log('chat room :: ', connInfo);
-        return Promise.all(connInfo.remoteOfferCandidates.map((can) => {
+        return Promise.all(connInfo.get('remoteOfferCandidates').map((can) => {
           return this.destConn.addIceCandidate(new RTCIceCandidate(can))
             .then(() => {
               console.log('set ICE candidate success');
@@ -224,10 +224,10 @@ export default class ChatRoom extends Component {
 
   finishConnection() {
     const { connInfo, connected } = this.props.store;
-    this.originConn.setRemoteDescription(connInfo.remoteAnswer)
+    this.originConn.setRemoteDescription(connInfo.get('remoteAnswer'))
     .then(() => {
         console.log('set origin remote session success');
-        Promise.all(connInfo.remoteAnswerCandidates.map((can) => {
+        Promise.all(connInfo.get('remoteAnswerCandidates').map((can) => {
           return this.originConn.addIceCandidate(new RTCIceCandidate(can))
             .then(() => {
               console.log('set ICE candidate success');
@@ -246,7 +246,7 @@ export default class ChatRoom extends Component {
     const { match } = this.props;
 
     // const friendId = match.params.friendId;
-
+    console.log('render chat');
     return (
       <div className="chat-room">
         <div className="chat-room-b">

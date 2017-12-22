@@ -36,6 +36,25 @@ export default class SafeApi {
     };
   }
 
+  stringifyConnInfo(connInfo) {
+    const isCaller = (connInfo.get('persona') === CONST.USER_POSITION.CALLER);
+    const obj = {};
+    obj['initiater'] = connInfo.get('callerID');
+    obj['state'] = connInfo.get('state');
+    obj['caller'] = {};
+    obj['callee'] = {};
+    obj.caller['offer'] = isCaller ? connInfo.get('offer') : connInfo.get('remoteOffer');
+    obj.caller['offerCandidates'] = isCaller ? connInfo.get('offerCandidates') : connInfo.get('remoteOfferCandidates');
+    obj.caller['answer'] = isCaller ? connInfo.get('answer') : connInfo.get('remoteAnswer');
+    obj.caller['answerCandidates'] = isCaller ? connInfo.get('answerCandidates') : connInfo.get('remoteAnswerCandidates');
+    obj.callee['offer'] = isCaller ? connInfo.get('remoteOffer') : connInfo.get('offer');
+    obj.callee['offerCandidates'] = isCaller ? connInfo.get('remoteOfferCandidates') : connInfo.get('offerCandidates');
+    obj.callee['answer'] = isCaller ? connInfo.get('remoteAnswer') : connInfo.get('answer');
+    obj.callee['answerCandidates'] = isCaller ? connInfo.get('remoteAnswerCandidates') : connInfo.get('answerCandidates');
+    return JSON.stringify(obj);
+  }
+
+
   _createChannel() {
     return new Promise(async (resolve, reject) => {
       try {
@@ -308,7 +327,7 @@ export default class SafeApi {
     return new Promise(async (resolve, reject) => {
       console.log('put conn info', connInfo);
       try {
-        const channelMD = (connInfo.persona === CONST.USER_POSITION.CALLER) ? this.remoteChannelMD : this.channelMD;
+        const channelMD = (connInfo.get('persona') === CONST.USER_POSITION.CALLER) ? this.remoteChannelMD : this.channelMD;
 
         if (!channelMD) {
           return reject(new Error('channel not set'));
@@ -317,15 +336,15 @@ export default class SafeApi {
         const mutationHandle = await window.safeMutableDataEntries.mutate(entriesHandle);
         // const encryptedKey = await window.safeMutableData.encryptKey(this.remoteChannelMD, CONST.MD_KEY);
         try {
-          const connStr = await window.safeMutableData.get(channelMD, connInfo.callerID);
+          const connStr = await window.safeMutableData.get(channelMD, connInfo.get('callerID'));
           console.log('connStr', connStr);
 
-          await window.safeMutableDataMutation.update(mutationHandle, connInfo.callerID, connInfo.stringify(), connStr.version + 1);
+          await window.safeMutableDataMutation.update(mutationHandle, connInfo.get('callerID'), this.stringifyConnInfo(connInfo), connStr.version + 1);
           console.log('updateed into channel')
         } catch (err) {
           console.log('insert into channel', err)
-          console.log('insert into channel 1', mutationHandle, connInfo.callerID, connInfo.stringify())
-          await window.safeMutableDataMutation.insert(mutationHandle, connInfo.callerID, connInfo.stringify());
+          console.log('insert into channel 1', mutationHandle, connInfo.get('callerID'), this.stringifyConnInfo(connInfo))
+          await window.safeMutableDataMutation.insert(mutationHandle, connInfo.get('callerID'), this.stringifyConnInfo(connInfo));
         }
         await window.safeMutableData.applyEntriesMutation(channelMD, mutationHandle);
         window.safeMutableDataMutation.free(mutationHandle);
@@ -341,12 +360,12 @@ export default class SafeApi {
     return new Promise(async (resolve, reject) => {
       console.log('fetch info', connInfo)
       try {
-        const channelMD = (connInfo.persona === CONST.USER_POSITION.CALLER) ? this.remoteChannelMD : this.channelMD;
+        const channelMD = (connInfo.get('persona') === CONST.USER_POSITION.CALLER) ? this.remoteChannelMD : this.channelMD;
 
         if (!channelMD) {
           return reject(new Error('channel not set'));
         }
-        const connStr = await window.safeMutableData.get(channelMD, connInfo.callerID);
+        const connStr = await window.safeMutableData.get(channelMD, connInfo.get('callerID'));
         console.log('fetched info', connStr.buf)
         resolve(connStr.buf.toString());
       } catch (err) {
