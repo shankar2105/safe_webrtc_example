@@ -2,18 +2,21 @@ import { observable, action } from 'mobx';
 import CONST from '../constants';
 
 export default class Connection {
+  @observable callerID = id;
+  @observable persona = persona;
+  @observable state = null;
+  @observable offer = null;
+  @observable answer = null;
+  @observable offerCandidates = [];
+  @observable answerCandidates = [];
+  @observable remoteOffer = null;
+  @observable remoteAnswer = null;
+  @observable remoteOfferCandidates = [];
+  @observable remoteAnswerCandidates = [];
+
   constructor(id, persona) {
     this.callerID = id;
     this.persona = persona;
-    this.state = null;
-    this.offer = null;
-    this.answer = null;
-    this.offerCandidates = [];
-    this.answerCandidates = [];
-    this.remoteOffer = null;
-    this.remoteAnswer = null;
-    this.remoteOfferCandidates = [];
-    this.remoteAnswerCandidates = [];
   }
 
   toJson() {
@@ -39,43 +42,43 @@ export default class Connection {
     return JSON.stringify(jsonObj);
   }
 
-  setState(state) {
+  @action setState(state) {
     this.state = state;
   }
 
-  setID(id) {
+  @action setID(id) {
     this.callerID = id;
   }
 
-  setOffer(offer) {
+  @action setOffer(offer) {
     this.offer = offer;
   }
 
-  setAnswer(answer) {
+  @action setAnswer(answer) {
     this.answer = answer;
   }
 
-  setOfferCandidates(candidates) {
+  @action setOfferCandidates(candidates) {
     this.offerCandidates = candidates;
   }
 
-  setAnswerCandidates(candidates) {
+  @action setAnswerCandidates(candidates) {
     this.answerCandidates = candidates;
   }
 
-  setRemoteOffer(offer) {
+  @action setRemoteOffer(offer) {
     this.remoteOffer = offer;
   }
 
-  setRemoteAnswer(answer) {
+  @action setRemoteAnswer(answer) {
     this.remoteAnswer = answer;
   }
 
-  setRemoteOfferCandidates(candidates) {
+  @action setRemoteOfferCandidates(candidates) {
     this.remoteOfferCandidates = candidates;
   }
 
-  setRemoteAnswerCandidates(candidates) {
+  @action setRemoteAnswerCandidates(candidates) {
     this.remoteAnswerCandidates = candidates;
   }
 

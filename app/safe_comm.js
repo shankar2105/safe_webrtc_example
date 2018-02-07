@@ -23,9 +23,13 @@ const APP = {
   },
 };
 
+const keySeparator = '-';
+
 export default class SafeApi {
   constructor(nwStateCb) {
     this.app = null;
+    this.keys = {};
+    this.remoteKeys = {};
     this.pubNameCntr = null;
     this.serviceCntr = null;
     this.channelMD = null;
@@ -36,24 +40,56 @@ export default class SafeApi {
     };
   }
 
-  stringifyConnInfo(connInfo) {
-    const isCaller = (connInfo.get('persona') === CONST.USER_POSITION.CALLER);
-    const obj = {};
-    obj['initiater'] = connInfo.get('callerID');
-    obj['state'] = connInfo.get('state');
-    obj['caller'] = {};
-    obj['callee'] = {};
-    obj.caller['offer'] = isCaller ? connInfo.get('offer') : connInfo.get('remoteOffer');
-    obj.caller['offerCandidates'] = isCaller ? connInfo.get('offerCandidates') : connInfo.get('remoteOfferCandidates');
-    obj.caller['answer'] = isCaller ? connInfo.get('answer') : connInfo.get('remoteAnswer');
-    obj.caller['answerCandidates'] = isCaller ? connInfo.get('answerCandidates') : connInfo.get('remoteAnswerCandidates');
-    obj.callee['offer'] = isCaller ? connInfo.get('remoteOffer') : connInfo.get('offer');
-    obj.callee['offerCandidates'] = isCaller ? connInfo.get('remoteOfferCandidates') : connInfo.get('offerCandidates');
-    obj.callee['answer'] = isCaller ? connInfo.get('remoteAnswer') : connInfo.get('answer');
-    obj.callee['answerCandidates'] = isCaller ? connInfo.get('remoteAnswerCandidates') : connInfo.get('answerCandidates');
-    return JSON.stringify(obj);
+  stringify(connInfo) {
+    return JSON.stringify(connInfo);
   }
 
+  _setKeys(keys) {
+    console.log('set keys', keys);
+    if (keys) {
+      this.keys = keys;
+      return Promise.resolve(true);
+    }
+    return new Promise(async (resolve, reject) => {
+      if (!this.channelMD) {
+        return reject(new Error('Channel MD not set'));
+      }
+      try {
+        const pubSignKeyStr = await window.safeMutableData.get(this.channelMD, CONST.CRYPTO_KEYS.PUB_SIGN_KEY);
+        const secSignKeyStr = await window.safeMutableData.get(this.channelMD, CONST.CRYPTO_KEYS.SEC_SIGN_KEY);
+        const pubEncKeyStr = await window.safeMutableData.get(this.channelMD, CONST.CRYPTO_KEYS.PUB_ENC_KEY);
+        const secEncKeyStr = await window.safeMutableData.get(this.channelMD, CONST.CRYPTO_KEYS.SEC_ENC_KEY);
+
+        this.keys[CONST.CRYPTO_KEYS.PUB_SIGN_KEY] = await window.safeCrypto.pubSignKeyFromRaw(this.app, pubSignKeyStr.buf);
+        this.keys[CONST.CRYPTO_KEYS.SEC_SIGN_KEY] = await window.safeCrypto.secSignKeyFromRaw(this.app, secSignKeyStr.buf);
+        this.keys[CONST.CRYPTO_KEYS.PUB_ENC_KEY] = await window.safeCrypto.pubEncKeyFromRaw(this.app, pubEncKeyStr.buf);
+        this.keys[CONST.CRYPTO_KEYS.SEC_ENC_KEY] = await window.safeCrypto.secEncKeyFromRaw(this.app, secEncKeyStr.buf);
+        resolve(true);
+      } catch (err) {
+        reject(err);
+      }
+    });
+  }
+
+  _setRemoteKeys(keys) {
+    return new Promise(async (resolve, reject) => {
+      if (!this.remoteChannelMD) {
+        return reject(new Error('Channel MD not set'));
+      }
+      try {
+        const pubSignKeyStr = await window.safeMutableData.get(this.remoteChannelMD, CONST.CRYPTO_KEYS.PUB_SIGN_KEY);
+        const pubEncKeyStr = await window.safeMutableData.get(this.remoteChannelMD, CONST.CRYPTO_KEYS.PUB_ENC_KEY);
+
+        console.log('got remote keys');
+
+        this.remoteKeys[CONST.CRYPTO_KEYS.PUB_SIGN_KEY] = await window.safeCrypto.pubSignKeyFromRaw(this.app, pubSignKeyStr.buf);
+        this.remoteKeys[CONST.CRYPTO_KEYS.PUB_ENC_KEY] = await window.safeCrypto.pubEncKeyFromRaw(this.app, pubEncKeyStr.buf);
+        resolve(true);
+      } catch (err) {
+        reject(err);
+      }
+    });
+  }
 
   _createChannel() {
     return new Promise(async (resolve, reject) => {
@@ -63,22 +99,31 @@ export default class SafeApi {
         }
 
         this.channelMD = await window.safeMutableData.newRandomPrivate(this.app, CONST.TYPE_TAG.CHANNEL);
-
+        const keysHandle = {};
         // insert keys
         const signKeyPairHandle = await window.safeCrypto.generateSignKeyPair(this.app);
+
         const pubSignKey = await window.safeCryptoSignKeyPair.getPubSignKey(signKeyPairHandle);
+        keysHandle[CONST.CRYPTO_KEYS.PUB_SIGN_KEY] = pubSignKey;
         const pubSignKeyRaw = await window.safeCryptoPubSignKey.getRaw(pubSignKey);
         const pubSignKeyStr = pubSignKeyRaw.buffer.toString('hex');
+
         const secSignKey = await window.safeCryptoSignKeyPair.getSecSignKey(signKeyPairHandle);
+        keysHandle[CONST.CRYPTO_KEYS.SEC_SIGN_KEY] = secSignKey;
         const secSignKeyRaw = await window.safeCryptoSecSignKey.getRaw(secSignKey);
         const secSignKeyStr = secSignKeyRaw.buffer.toString('hex');
+
         const encKeyPairHandle = await window.safeCrypto.generateEncKeyPair(this.app);
         const pubEncKey = await window.safeCryptoEncKeyPair.getPubEncKey(encKeyPairHandle);
+        keysHandle[CONST.CRYPTO_KEYS.PUB_ENC_KEY] = pubEncKey;
         const pubEncKeyRaw = await window.safeCryptoPubEncKey.getRaw(pubEncKey);
         const pubEncKeyStr = pubEncKeyRaw.buffer.toString('hex');
+
         const secEncKey = await window.safeCryptoEncKeyPair.getSecEncKey(encKeyPairHandle);
+        keysHandle[CONST.CRYPTO_KEYS.SEC_ENC_KEY] = secEncKey;
         const secEncKeyRaw = await window.safeCryptoSecEncKey.getRaw(secEncKey);
         const secEncKeyStr = secEncKeyRaw.buffer.toString('hex');
+
         const entries = {};
         entries[CONST.CRYPTO_KEYS.PUB_SIGN_KEY] = pubSignKeyStr;
         entries[CONST.CRYPTO_KEYS.SEC_SIGN_KEY] = secSignKeyStr;
@@ -87,7 +132,7 @@ export default class SafeApi {
         await window.safeMutableData.quickSetup(this.channelMD, entries, 'WebRTC Channel', `WebRTC channel for ${hostName}`);
 
         // create a new permission set
-        const permSet = [CONST.PERMISSIONS.READ, CONST.PERMISSIONS.INSERT, CONST.PERMISSIONS.UPDATE];
+        const permSet = [CONST.PERMISSIONS.READ, CONST.PERMISSIONS.INSERT];
         await window.safeMutableData.setUserPermissions(this.channelMD, null, permSet, 1);
 
         const channelSerialData = await window.safeMutableData.serialise(this.channelMD);
@@ -98,7 +143,7 @@ export default class SafeApi {
         await window.safeMutableData.applyEntriesMutation(this.serviceCntr, mutationHandle);
         window.safeMutableDataMutation.free(mutationHandle);
         window.safeMutableDataEntries.free(entriesHandle);
-        console.log('created channel');
+        this._setKeys(keysHandle);
         resolve(true);
       } catch (err) {
         reject(err);
@@ -132,7 +177,6 @@ export default class SafeApi {
         }
         const ownCntr = await window.safeApp.getOwnContainer(this.app);
         this.selectedPubName = await window.safeMutableData.get(ownCntr, CONST.SELECTED_PUB_NAME_KEY);
-        console.log('this.selectedPubName', this.selectedPubName);
         resolve(true);
       } catch (err) {
         if (err.code !== CONST.ERR_CODE.NO_SUCH_ENTRY) {
@@ -156,12 +200,10 @@ export default class SafeApi {
 
         resolve(true);
       } catch (err) {
-        console.log('service container permission', err);
         if (err.code !== -1011) {
           return reject(err);
         }
         const serviceCntrInfo = await window.safeMutableData.getNameAndTag(this.serviceCntr);
-        console.log('serviceCntrInfo', serviceCntrInfo);
         await window.safeApp.authoriseShareMd(this.app, [
           {
             type_tag: serviceCntrInfo.type_tag,
@@ -169,7 +211,6 @@ export default class SafeApi {
             perms: [CONST.PERMISSIONS.INSERT]
           }
         ]);
-        console.log('md authorised');
         resolve();
       }
     });
@@ -182,8 +223,6 @@ export default class SafeApi {
         const uri = await window.safeApp.authorise(this.app, APP.containers, APP.opts);
         await window.safeApp.connectAuthorised(this.app, uri);
         await this._getPublicNamesCntr();
-        // await this._getSelectedPublicName();
-        // await this._setup();
         resolve(true);
       } catch (err) {
         reject(err);
@@ -211,8 +250,6 @@ export default class SafeApi {
         const publicNames = [];
         const entriesHandle = await window.safeMutableData.getEntries(this.pubNameCntr);
         await window.safeMutableDataEntries.forEach(entriesHandle, (k, v) => {
-          // const decKey = await window.safeMutableData.decrypt(this.pubNameCntr, k);
-          // console.log('Entries :: ', decKey.toString(), v.buf.toString());
           publicNames.push(k);
         });
         const encPubNamesQ = [];
@@ -251,16 +288,9 @@ export default class SafeApi {
           // search for webrtc mdata
           const encChannelKey = await window.safeMutableData.encryptKey(this.serviceCntr, CONST.MD_KEY);
           const channelSerial = await window.safeMutableData.get(this.serviceCntr, encChannelKey);
-          console.log('channelSerial', channelSerial)
           this.channelMD = await window.safeMutableData.fromSerial(this.app, channelSerial.buf);
-
-          // const entriesHandle = await window.safeMutableData.getEntries(this.channelMD);
-          // await window.safeMutableDataEntries.forEach(entriesHandle, (k, v) => {
-          //   console.log('Entries :: ', k, k.toString(), v.buf.toString());
-          // });
-          console.log('channel already exists');
+          await this._setKeys(null);
         } catch (e) {
-          console.log('channel not found', e.code);
           if (e.code !== CONST.ERR_CODE.NO_SUCH_ENTRY) {
             throw e;
           }
@@ -291,8 +321,10 @@ export default class SafeApi {
         await window.safeMutableDataEntries.forEach(entriesHandle, (k, v) => {
           const keyStr = k.toString();
           if (!whiteListKeys.includes(keyStr)) {
-            invites.push(keyStr);
-            console.log('Entries :: ', k, k.toString(), v.buf.toString());
+            const dataArr = keyStr.split(keySeparator);
+            if (dataArr.length == 2 && dataArr[1] === CONST.CONN_STATE.SEND_INVITE) {
+              invites.push(dataArr[0]);
+            }
           }
         });
         resolve(invites);
@@ -313,9 +345,8 @@ export default class SafeApi {
 
         const encChannelKey = await window.safeMutableData.encryptKey(fdPubNameCntr, CONST.MD_KEY);
         const fdChannelSerial = await window.safeMutableData.get(fdPubNameCntr, encChannelKey);
-        console.log('channelSerial', fdChannelSerial)
         this.remoteChannelMD = await window.safeMutableData.fromSerial(this.app, fdChannelSerial.buf);
-        console.log('fd channel exist', this.remoteChannelMD);
+        await this._setRemoteKeys();
         resolve(true);
       } catch (err) {
         reject(err);
@@ -323,29 +354,70 @@ export default class SafeApi {
     });
   }
 
+  _getDataKey(initiater, state) {
+    let dataKey = null;
+    if (!state) {
+      dataKey = `${initiater}${keySeparator}${CONST.CONN_STATE.SEND_INVITE}`;
+    } else if (state === CONST.CONN_STATE.SEND_INVITE || state === CONST.CONN_STATE.CALLING) {
+      dataKey = `${initiater}${keySeparator}${state}`;
+    } else {
+      let dataKey = `${initiater}${keySeparator}${CONST.CONN_STATE.SEND_INVITE}`;
+      if (state === CONST.CONN_STATE.CONNECTED) {
+        dataKey = `${initiater}${keySeparator}${CONST.CONN_STATE.CALLING}`;
+      }
+    }
+    return dataKey;
+  }
+
   putConnInfo(connInfo) {
     return new Promise(async (resolve, reject) => {
-      console.log('put conn info', connInfo);
       try {
-        const channelMD = (connInfo.get('persona') === CONST.USER_POSITION.CALLER) ? this.remoteChannelMD : this.channelMD;
+        const isCaller = (connInfo.data.persona === CONST.USER_POSITION.CALLER);
+        const channelMD = isCaller ? this.remoteChannelMD : this.channelMD;
 
         if (!channelMD) {
           return reject(new Error('channel not set'));
         }
+
         const entriesHandle = await window.safeMutableData.getEntries(channelMD);
         const mutationHandle = await window.safeMutableDataEntries.mutate(entriesHandle);
-        // const encryptedKey = await window.safeMutableData.encryptKey(this.remoteChannelMD, CONST.MD_KEY);
-        try {
-          const connStr = await window.safeMutableData.get(channelMD, connInfo.get('callerID'));
-          console.log('connStr', connStr);
 
-          await window.safeMutableDataMutation.update(mutationHandle, connInfo.get('callerID'), this.stringifyConnInfo(connInfo), connStr.version + 1);
-          console.log('updateed into channel')
-        } catch (err) {
-          console.log('insert into channel', err)
-          console.log('insert into channel 1', mutationHandle, connInfo.get('callerID'), this.stringifyConnInfo(connInfo))
-          await window.safeMutableDataMutation.insert(mutationHandle, connInfo.get('callerID'), this.stringifyConnInfo(connInfo));
+        const data = this.stringify(connInfo.data);
+
+        console.log('put data', data);
+        // // sign the data
+        const signedData = await window.safeCryptoSecSignKey.sign(this.keys[CONST.CRYPTO_KEYS.SEC_SIGN_KEY], data);
+        console.log('put signed', signedData);
+
+        // // encrypt the signed data
+        // const encryptedData = await window.safeCryptoPubEncKey.encrypt(
+        //   this.remoteKeys[CONST.CRYPTO_KEYS.PUB_ENC_KEY],
+        //   data,
+        //   this.keys[CONST.CRYPTO_KEYS.SEC_ENC_KEY]
+        // );
+
+        const encryptedData = await window.safeCryptoPubEncKey.encryptSealed(this.remoteKeys[CONST.CRYPTO_KEYS.PUB_ENC_KEY], data);
+        const encDataStr = String.fromCharCode.apply(null, new Uint8Array(encryptedData))
+        console.log('put enc data', encDataStr);
+
+        const dataKey = this._getDataKey(connInfo.data.initiater, connInfo.state);
+        console.log('put data key', dataKey);
+
+        const connInfoStr = this.stringify({
+          state: connInfo.state,
+          data: encDataStr
+        });
+
+        // insert if it is caller
+        if (connInfo.state === CONST.CONN_STATE.SEND_INVITE || connInfo.state === CONST.CONN_STATE.CALLING) {
+          console.log('insert data', dataKey);
+          await window.safeMutableDataMutation.insert(mutationHandle, dataKey, connInfoStr);
+        } else {
+          console.log('update data', dataKey)
+          const connStr = await window.safeMutableData.get(channelMD, dataKey);
+          await window.safeMutableDataMutation.update(mutationHandle, dataKey, connInfoStr, connStr.version + 1);
         }
+
         await window.safeMutableData.applyEntriesMutation(channelMD, mutationHandle);
         window.safeMutableDataMutation.free(mutationHandle);
         window.safeMutableDataEntries.free(entriesHandle);
@@ -358,16 +430,44 @@ export default class SafeApi {
 
   fetchConnInfo(connInfo) {
     return new Promise(async (resolve, reject) => {
-      console.log('fetch info', connInfo)
       try {
-        const channelMD = (connInfo.get('persona') === CONST.USER_POSITION.CALLER) ? this.remoteChannelMD : this.channelMD;
-
+        console.log('fetch conn info :: ', connInfo);
+        const isCaller = (connInfo.data.persona === CONST.USER_POSITION.CALLER);
+        const channelMD = isCaller ? this.remoteChannelMD : this.channelMD;
         if (!channelMD) {
           return reject(new Error('channel not set'));
         }
-        const connStr = await window.safeMutableData.get(channelMD, connInfo.get('callerID'));
-        console.log('fetched info', connStr.buf)
-        resolve(connStr.buf.toString());
+
+        const dataKey = this._getDataKey(connInfo.data.initiater, connInfo.state);
+        console.log('fetch conn info data key :: ', connInfo, dataKey);
+        const connStr = await window.safeMutableData.get(channelMD, dataKey);
+
+        const parsedConnInfo = JSON.parse(connStr.buf.toString());
+        console.log('connStr fetch', parsedConnInfo);
+
+        if (isCaller && parsedConnInfo.state && (parsedConnInfo.state === CONST.CONN_STATE.SEND_INVITE || parsedConnInfo.state === CONST.CONN_STATE.CALLING)) {
+          return resolve(JSON.stringify(connInfo));
+        }
+
+        if (!isCaller && parsedConnInfo.state && (parsedConnInfo.state === CONST.CONN_STATE.INVITE_ACCEPTED || parsedConnInfo.state === CONST.CONN_STATE.CONNECTED)) {
+          return resolve(JSON.stringify(connInfo));
+        }
+        console.log('enc datas', this.keys[CONST.CRYPTO_KEYS.SEC_ENC_KEY], this.remoteKeys[CONST.CRYPTO_KEYS.PUB_ENC_KEY], parsedConnInfo.data.length);
+        const decryptedData = await window.safeCryptoSecEncKey.decrypt(
+          this.keys[CONST.CRYPTO_KEYS.SEC_ENC_KEY],
+          parsedConnInfo.data,
+          this.keys[CONST.CRYPTO_KEYS.PUB_ENC_KEY]);
+        console.log('decryptedData', decryptedData);
+
+        const verifiedData = await window.safeCryptoPubSignKey.verify(
+          this.remoteKeys[CONST.CRYPTO_KEYS.PUB_SIGN_KEY],
+          signedData);
+        console.log('verifiedData', verifiedData);
+
+        resolve(JSON.stringify({
+          state: parsedConnInfo.state,
+          data: verifiedData.toString()
+        }));
       } catch (err) {
         reject(err);
       }
@@ -377,12 +477,10 @@ export default class SafeApi {
   sendInvite(connInfo) {
     return new Promise(async (resolve, reject) => {
       try {
-        console.log('send invite', this, connInfo);
         if (!this.remoteChannelMD) {
           return reject(new Error('remote channel not set'));
         }
         await this.putConnInfo(connInfo);
-        console.log('invite sent');
         resolve(true);
       } catch (err) {
         reject(err);
@@ -392,13 +490,11 @@ export default class SafeApi {
 
   acceptInvite(connInfo) {
     return new Promise(async (resolve, reject) => {
-      console.log('invite accepted', connInfo);
       try {
         if (!this.channelMD) {
           return reject(new Error('channel handle is empty'));
         }
         await this.putConnInfo(connInfo);
-        console.log('accpected invite');
         resolve(true);
       } catch (err) {
         reject(err);
@@ -409,12 +505,10 @@ export default class SafeApi {
   calling(connInfo) {
     return new Promise(async (resolve, reject) => {
       try {
-        console.log('calling', connInfo);
         if (!this.remoteChannelMD) {
           return reject(new Error('channel handle is empty'));
         }
         await this.putConnInfo(connInfo);
-        console.log('calling');
         resolve(true);
       } catch (err) {
         reject(err);
@@ -422,16 +516,13 @@ export default class SafeApi {
     });
   }
 
-
   connected(connInfo) {
     return new Promise(async (resolve, reject) => {
       try {
-        console.log('connected', connInfo);
         if (!this.channelMD) {
           return reject(new Error('channel handle is empty'));
         }
         await this.putConnInfo(connInfo);
-        console.log('calling');
         resolve(true);
       } catch (err) {
         reject(err);

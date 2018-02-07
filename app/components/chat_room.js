@@ -19,6 +19,8 @@ export default class ChatRoom extends Component {
     this.destCandidates = [];
     this.onCreateOfferSuccess = this.onCreateOfferSuccess.bind(this);
     this.onClickCancel = this.onClickCancel.bind(this);
+    this.setTimer = this.setTimer.bind(this);
+    this.timer = null;
   }
 
   componentDidMount() {
@@ -36,16 +38,36 @@ export default class ChatRoom extends Component {
       });
   }
 
-  componentDidUpdate() {
-    const { connInfo } = this.props.store;
-    console.log('update', connInfo);
-    if (connInfo.get('remoteOffer')) {
-      this.call();
-    }
+  // componentDidUpdate() {
+  //   const { store } = this.props;
+  //   console.log('update');
+  //   if (store.remoteOffer) {
+  //     this.call();
+  //   }
 
-    if(connInfo.get('answer')) {
-      this.finishConnection();
-    }
+  //   if(store.answer) {
+  //     this.finishConnection();
+  //   }
+  // }
+
+  setTimer(fn) {
+    const { store } = this.props;
+    this.timer = setTimeout(() => {
+      fn.call(store).then((res) => {
+        clearTimeout(this.timer);
+        if (!res) {
+          this.setTimer(fn);
+          return;
+        }
+        if (store.persona === CONST.USER_POSITION.CALLER && store.remoteOffer) {
+          this.call();
+        }
+
+        if(store.persona === CONST.USER_POSITION.CALLEE && store.remoteAnswer) {
+          this.finishConnection();
+        }
+      });
+    })
   }
 
   startStream() {
@@ -66,7 +88,10 @@ export default class ChatRoom extends Component {
           this.props.store.setOfferCandidates(this.originCandidates);
           console.log('offer candidates over')
           if (!this.friendID) {
-            this.props.store.sendInvite();
+            this.props.store.sendInvite()
+              .then(() => {
+                this.setTimer(this.props.store.checkInviteAccepted);
+              })
           } else {
             this.call();
           }
@@ -96,10 +121,14 @@ export default class ChatRoom extends Component {
         if (!e.candidate) {
           this.props.store.setAnswerCandidates(this.destCandidates);
           if (!this.friendID) {
-            this.props.store.calling();
+            this.props.store.calling().then(() => {
+              this.setTimer(this.props.store.checkCallAccepted);
+            });
           } else {
             // FIXME check this.friendID exists
-            this.props.store.acceptInvite();
+            this.props.store.acceptInvite().then(() => {
+              this.setTimer(this.props.store.checkForCalling);
+            });
           }
           return;
         }
@@ -121,12 +150,11 @@ export default class ChatRoom extends Component {
   }
 
   call() {
-    const { connInfo } = this.props.store;
-    this.destConn.setRemoteDescription(connInfo.get('remoteOffer'))
+    const { store } = this.props;
+    this.destConn.setRemoteDescription(store.remoteOffer)
       .then(() => {
         console.log('set destination remote session success');
-        console.log('chat room :: ', connInfo);
-        return Promise.all(connInfo.get('remoteOfferCandidates').map((can) => {
+        return Promise.all(store.remoteOfferCandidates.map((can) => {
           return this.destConn.addIceCandidate(new RTCIceCandidate(can))
             .then(() => {
               console.log('set ICE candidate success');
@@ -223,11 +251,11 @@ export default class ChatRoom extends Component {
   }
 
   finishConnection() {
-    const { connInfo, connected } = this.props.store;
-    this.originConn.setRemoteDescription(connInfo.get('remoteAnswer'))
+    const { store } = this.props;
+    this.originConn.setRemoteDescription(store.remoteAnswer)
     .then(() => {
         console.log('set origin remote session success');
-        Promise.all(connInfo.get('remoteAnswerCandidates').map((can) => {
+        Promise.all(store.remoteAnswerCandidates.map((can) => {
           return this.originConn.addIceCandidate(new RTCIceCandidate(can))
             .then(() => {
               console.log('set ICE candidate success');
@@ -235,7 +263,7 @@ export default class ChatRoom extends Component {
               console.error('set ICE candidate failed ::', err);
             });
         })).then(() => {
-          connected();
+          store.connected();
         });
       }, (err) => {
         console.error('set origin remote session failed ::', err);

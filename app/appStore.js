@@ -13,12 +13,24 @@ export default class AppStore {
   @observable invites = [];
   @observable selectedPubName = '';
   @observable connectionState = CONST.CONN_STATE.INIT;
-  @observable connInfo = observable.map();
   @observable isNwConnected = true;
   @observable isNwConnecting = false;
 
+  @observable callerID = null;
+  @observable persona = null;
+  @observable state = null;
+  @observable offer = null;
+  @observable answer = null;
+  @observable offerCandidates = [];
+  @observable answerCandidates = [];
+  @observable remoteOffer = null;
+  @observable remoteAnswer = null;
+  @observable remoteOfferCandidates = [];
+  @observable remoteAnswerCandidates = [];
+
   constructor() {
     this.api = null;
+    this.connInfo = null;
   }
 
   @action
@@ -34,76 +46,82 @@ export default class AppStore {
   }
 
   @action
-  createConnInfo(id, persona) {
-    this.connInfo.set('callerID', id);
-    this.connInfo.set('persona', persona);
+  createConn(id, persona) {
+    this.callerID = id;
+    this.persona = persona;
   }
 
   @action
   setCallerID(id) {
-    this.connInfo.set('callerID', id);
+    this.callerID = id;
   }
 
   @action
   setConnState(state) {
-    this.connInfo.set('state', state);
+    this.state = state;
   }
 
   @action
   setRemoteOffer(offer) {
-    this.connInfo.set('remoteOffer', offer);
+    this.remoteOffer = offer;
   }
 
   @action
   setRemoteOfferCandidates(candidates) {
-    this.connInfo.set('remoteOfferCandidates', candidates);
+    this.remoteOfferCandidates = candidates;
   }
 
   @action
   setRemoteAnswer(answer) {
-    this.connInfo.set('remoteAnswer', answer);
+    this.remoteAnswer = answer;
   }
 
   @action
   setRemoteAnswerCandidates(candidates) {
-    this.connInfo.set('remoteAnswerCandidates', candidates);
+    this.remoteAnswerCandidates = candidates;
   }
 
-  @action
-  setOffer(offer) {
-    this.connInfo.set('offer', offer);
-  }
-
-  @action
-  setAnswer(answer) {
-    this.connInfo.set('answer', answer);
-  }
-
-  @action
-  setOfferCandidates(candidates) {
-    this.connInfo.set('offerCandidates', candidates);
-  }
-
-  @action
-  setAnswerCandidates(candidates) {
-    this.connInfo.set('answerCandidates', candidates);
-  }
-
-  parseConnStr(jsonStr) {
+  transformConnInfo() {
+    const isCaller = (this.persona === CONST.USER_POSITION.CALLER);
+    const res = {
+      state: this.state
+    };
     const obj = {};
-    const parsedObj = JSON.parse(jsonStr);
-    obj['initiater'] = parsedObj.initiater;
-    obj['state'] = parsedObj.state;
+    obj['persona'] = this.persona;
+    obj['initiater'] = this.callerID;
+    // obj['state'] = this.state;
     obj['caller'] = {};
     obj['callee'] = {};
-    obj.caller['offer'] = parsedObj.caller.offer;
-    obj.caller['offerCandidates'] = parsedObj.caller.offerCandidates;
-    obj.caller['answer'] = parsedObj.caller.answer;
-    obj.caller['answerCandidates'] = parsedObj.caller.answerCandidates;
-    obj.callee['offer'] = parsedObj.callee.offer;
-    obj.callee['offerCandidates'] = parsedObj.callee.offerCandidates;
-    obj.callee['answer'] = parsedObj.callee.answer;
-    obj.callee['answerCandidates'] = parsedObj.callee.answerCandidates;
+    obj.caller['offer'] = isCaller ? this.offer : this.remoteOffer;
+    obj.caller['offerCandidates'] = isCaller ? this.offerCandidates : this.remoteOfferCandidates;
+    obj.caller['answer'] = isCaller ? this.answer : this.remoteAnswer;
+    obj.caller['answerCandidates'] = isCaller ? this.answerCandidates : this.remoteAnswerCandidates;
+    obj.callee['offer'] = isCaller ? this.remoteOffer : this.offer;
+    obj.callee['offerCandidates'] = isCaller ? this.remoteOfferCandidates : this.offerCandidates;
+    obj.callee['answer'] = isCaller ? this.remoteAnswer : this.answer;
+    obj.callee['answerCandidates'] = isCaller ? this.remoteAnswerCandidates : this.answerCandidates;
+
+    res.data = obj;
+    return res;
+  }
+
+  parseConnStr(connStr) {
+    const obj = {};
+    const parsedObj = JSON.parse(connStr);
+    obj['state'] = parsedObj.state;
+
+    const data = parsedObj.data;
+    obj['initiater'] = data.initiater;
+    obj['caller'] = {};
+    obj['callee'] = {};
+    obj.caller['offer'] = data.caller.offer;
+    obj.caller['offerCandidates'] = data.caller.offerCandidates;
+    obj.caller['answer'] = data.caller.answer;
+    obj.caller['answerCandidates'] = data.caller.answerCandidates;
+    obj.callee['offer'] = data.callee.offer;
+    obj.callee['offerCandidates'] = data.callee.offerCandidates;
+    obj.callee['answer'] = data.callee.answer;
+    obj.callee['answerCandidates'] = data.callee.answerCandidates;
     return obj;
   }
 
@@ -111,58 +129,64 @@ export default class AppStore {
   checkInviteAccepted() {
     return new Promise(async (resolve, reject) => {
       try {
-        const connStr = await this.api.fetchConnInfo(this.connInfo);
+        const connInfo = this.transformConnInfo();
+        const connStr = await this.api.fetchConnInfo(connInfo);
         console.log('check invted accpedyed', connStr);
         const parsedConnInfo = this.parseConnStr(connStr);
         if (parsedConnInfo.state === CONST.CONN_STATE.INVITE_ACCEPTED) {
-          transaction(() => {
-            this.setRemoteOffer(parsedConnInfo.callee.offer);
-            this.setRemoteOfferCandidates(parsedConnInfo.callee.offerCandidates);
-            this.setRemoteAnswer(parsedConnInfo.callee.answer);
-            this.setRemoteAnswerCandidates(parsedConnInfo.callee.answerCandidates);
-          });
-          console.log('conn info on chekc', isObservable(this.connInfo), this.connInfo);
+          this.setRemoteOffer(parsedConnInfo.callee.offer);
+          this.setRemoteOfferCandidates(parsedConnInfo.callee.offerCandidates);
+          this.setRemoteAnswer(parsedConnInfo.callee.answer);
+          this.setRemoteAnswerCandidates(parsedConnInfo.callee.answerCandidates);
+          const connInfo1 = this.transformConnInfo();
+          console.log('conn info on chekc', connInfo1);
           return resolve(true);
         }
-        await this.timeout(CONST.UI.CONN_TIMER_INTERVAL);
-        this.checkInviteAccepted();
+        resolve(false);
+        // await this.timeout(CONST.UI.CONN_TIMER_INTERVAL);
+        // this.checkInviteAccepted();
       } catch (err) {
         reject(err);
       }
     });
   }
 
-  @action.bound
+  @action
   checkCallAccepted() {
     return new Promise(async (resolve, reject) => {
       try {
-        const connStr = await this.api.fetchConnInfo(this.connInfo);
+        const connInfo = this.transformConnInfo();
+        const connStr = await this.api.fetchConnInfo(connInfo);
         const parsedConnInfo = this.parseConnStr(connStr);
         if (parsedConnInfo.state === CONST.CONN_STATE.CONNECTED) {
           this.connectionState = CONST.CONN_STATE.CONNECTED;
           return resolve(true);
         }
-        await this.timeout(CONST.UI.CONN_TIMER_INTERVAL);
-        this.checkCallAccepted();
+        resolve(false);
+        // await this.timeout(CONST.UI.CONN_TIMER_INTERVAL);
+        // this.checkCallAccepted();
       } catch (err) {
         reject(err);
       }
     });
   }
 
-  @action.bound
+  @action
   checkForCalling() {
     return new Promise(async (resolve, reject) => {
       try {
-        const connStr = await this.api.fetchConnInfo(this.connInfo);
+        const connInfo = this.transformConnInfo();
+        const connStr = await this.api.fetchConnInfo(connInfo);
         const parsedConnInfo = this.parseConnStr(connStr);
+        console.log('checkForCalling', parsedConnInfo);
         if (parsedConnInfo.state === CONST.CONN_STATE.CALLING) {
           this.setRemoteAnswer(parsedConnInfo.caller.answer);
-          this.setRemoteAnswerCandidates(parsedConnInfo.caller.answerCanditates);
+          this.setRemoteAnswerCandidates(parsedConnInfo.caller.answerCandidates);
           return resolve(true);
         }
-        await this.timeout(CONST.UI.CONN_TIMER_INTERVAL);
-        this.checkForCalling();
+        resolve(false);
+        // await this.timeout(CONST.UI.CONN_TIMER_INTERVAL);
+        // this.checkForCalling();
       } catch (err) {
         reject(err);
       }
@@ -176,6 +200,30 @@ export default class AppStore {
       return;
     }
     this.isNwConnected = false;
+  }
+
+  @action
+  setOffer(offer) {
+    this.offer = offer;
+    // this.connInfo.setOffer(offer);
+  }
+
+  @action
+  setAnswer(answer) {
+    this.answer = answer;
+    // this.connInfo.setAnswer(answer);
+  }
+
+  @action
+  setOfferCandidates(candidates) {
+    this.offerCandidates = candidates;
+    // this.connInfo.setOfferCandidates(candidates);
+  }
+
+  @action
+  setAnswerCandidates(candidates) {
+    this.answerCandidates = candidates;
+    // this.connInfo.setAnswerCandidates(candidates);
   }
 
   @action
@@ -250,15 +298,16 @@ export default class AppStore {
   initialiseConnInfo(friendID) {
     return new Promise(async(resolve, reject) => {
       try {
+        if (friendID) {
+          await this.api.connect(friendID);
+        }
         const isCallee = !!friendID;
         const userPosition = isCallee ? CONST.USER_POSITION.CALLEE : CONST.USER_POSITION.CALLER;
-
-        this.createConnInfo(this.selectedPubName, userPosition);
-        // this.connInfo = new ConnModel(this.selectedPubName, userPosition);
-        // extendObservable(this.connInfo, connInfoObj)
+        this.createConn(this.selectedPubName, userPosition);
         if (isCallee) {
           this.setCallerID(friendID);
-          const connInfoStr = await this.api.fetchConnInfo(this.connInfo);
+          const connInfo = this.transformConnInfo();
+          const connInfoStr = await this.api.fetchConnInfo(connInfo);
           const parsedJson = this.parseConnStr(connInfoStr);
           this.setRemoteOffer(parsedJson.caller.offer);
           this.setRemoteOfferCandidates(parsedJson.caller.offerCandidates);
@@ -276,17 +325,13 @@ export default class AppStore {
   sendInvite() {
     return new Promise(async (resolve, reject) => {
       try {
-        if (!this.connInfo) {
-          throw new Error('Connection info not set');
-        }
         // FIXME remove this.connectionState and handle with connInfo.state
         this.connectionState = CONST.CONN_STATE.SEND_INVITE;
         this.setConnState(this.connectionState);
-        await this.api.sendInvite(this.connInfo);
-        console.log('isObservale 1', isObservable(this.connInfo));
+        const connInfo = this.transformConnInfo();
+        await this.api.sendInvite(connInfo);
         // update data
         // await this.checkInviteAccepted();
-        action(this.checkInviteAccepted());
         resolve(true);
       } catch (err) {
         console.error('Send invite error :: ', err);
@@ -300,14 +345,12 @@ export default class AppStore {
   acceptInvite() {
     return new Promise(async (resolve, reject) => {
       try {
-        if (!this.connInfo) {
-          return;
-        }
         this.connectionState = CONST.CONN_STATE.INVITE_ACCEPTED;
         this.setConnState(this.connectionState);
-        await this.api.acceptInvite(this.connInfo);
+        const connInfo = this.transformConnInfo();
+        await this.api.acceptInvite(connInfo);
         // update data
-        this.checkForCalling();
+        // this.checkForCalling();
         resolve(true);
       } catch (err) {
         console.error('Accept invite error :: ', err);
@@ -320,14 +363,12 @@ export default class AppStore {
   calling() {
     return new Promise(async (resolve) => {
       try {
-        if (!this.connInfo) {
-          return resolve();
-        }
         this.connectionState = CONST.CONN_STATE.CALLING;
         this.setConnState(this.connectionState);
-        await this.api.calling(this.connInfo);
+        const connInfo = this.transformConnInfo();
+        await this.api.calling(connInfo);
         // update data
-        this.checkCallAccepted();
+        // this.checkCallAccepted();
         resolve(true);
       } catch (err) {
         console.error('Calling error :: ', err);
@@ -352,12 +393,10 @@ export default class AppStore {
   connected() {
     return new Promise(async (resolve) => {
       try {
-        if (!this.connInfo) {
-          return resolve();
-        }
         this.connectionState = CONST.CONN_STATE.CONNECTED;
-        this.connInfo.setState(this.connectionState);
-        await this.api.connected(this.connInfo);
+        this.setConnState(this.connectionState);
+        const connInfo = this.transformConnInfo();
+        await this.api.connected(connInfo);
         // update data
         this.checkCallAccepted();
         resolve(true);
