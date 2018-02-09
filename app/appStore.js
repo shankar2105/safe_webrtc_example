@@ -405,4 +405,8 @@ export default class AppStore {
       }
     });
   }
+
+  testEnc() {
+    this.api.testEnc();
+  }
 }

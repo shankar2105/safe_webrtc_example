@@ -384,10 +384,9 @@ export default class SafeApi {
 
         const data = this.stringify(connInfo.data);
 
-        console.log('put data', data);
-        // // sign the data
-        const signedData = await window.safeCryptoSecSignKey.sign(this.keys[CONST.CRYPTO_KEYS.SEC_SIGN_KEY], data);
-        console.log('put signed', signedData);
+        // sign the data
+        // const signedData = await window.safeCryptoSecSignKey.sign(this.keys[CONST.CRYPTO_KEYS.SEC_SIGN_KEY], data);
+        // console.log('put signed', signedData);
 
         // // encrypt the signed data
         // const encryptedData = await window.safeCryptoPubEncKey.encrypt(
@@ -396,20 +395,21 @@ export default class SafeApi {
         //   this.keys[CONST.CRYPTO_KEYS.SEC_ENC_KEY]
         // );
 
-        const encryptedData = await window.safeCryptoPubEncKey.encryptSealed(this.remoteKeys[CONST.CRYPTO_KEYS.PUB_ENC_KEY], data);
-        const encDataStr = String.fromCharCode.apply(null, new Uint8Array(encryptedData))
-        console.log('put enc data', encDataStr);
+        const encryptedData = await window.safeCryptoPubEncKey.encryptSealed(this.remoteKeys[CONST.CRYPTO_KEYS.PUB_ENC_KEY], 'data hello');
+        console.log('encryptedData', encryptedData, new Uint8Array(encryptedData))
+        const dataArr = Array.from(new Uint8Array(encryptedData));
+        console.log('put enc data', dataArr);
 
         const dataKey = this._getDataKey(connInfo.data.initiater, connInfo.state);
         console.log('put data key', dataKey);
 
         const connInfoStr = this.stringify({
           state: connInfo.state,
-          data: encDataStr
+          data: dataArr
         });
 
         // insert if it is caller
-        if (connInfo.state === CONST.CONN_STATE.SEND_INVITE || connInfo.state === CONST.CONN_STATE.CALLING) {
+        if (isCaller) {
           console.log('insert data', dataKey);
           await window.safeMutableDataMutation.insert(mutationHandle, dataKey, connInfoStr);
         } else {
@@ -440,9 +440,12 @@ export default class SafeApi {
 
         const dataKey = this._getDataKey(connInfo.data.initiater, connInfo.state);
         console.log('fetch conn info data key :: ', connInfo, dataKey);
+
         const connStr = await window.safeMutableData.get(channelMD, dataKey);
+        console.log('connStr :: ', connStr);
 
         const parsedConnInfo = JSON.parse(connStr.buf.toString());
+        // const parsedConnInfo = connStr.buf.toString();
         console.log('connStr fetch', parsedConnInfo);
 
         if (isCaller && parsedConnInfo.state && (parsedConnInfo.state === CONST.CONN_STATE.SEND_INVITE || parsedConnInfo.state === CONST.CONN_STATE.CALLING)) {
@@ -452,21 +455,36 @@ export default class SafeApi {
         if (!isCaller && parsedConnInfo.state && (parsedConnInfo.state === CONST.CONN_STATE.INVITE_ACCEPTED || parsedConnInfo.state === CONST.CONN_STATE.CONNECTED)) {
           return resolve(JSON.stringify(connInfo));
         }
-        console.log('enc datas', this.keys[CONST.CRYPTO_KEYS.SEC_ENC_KEY], this.remoteKeys[CONST.CRYPTO_KEYS.PUB_ENC_KEY], parsedConnInfo.data.length);
-        const decryptedData = await window.safeCryptoSecEncKey.decrypt(
-          this.keys[CONST.CRYPTO_KEYS.SEC_ENC_KEY],
-          parsedConnInfo.data,
-          this.keys[CONST.CRYPTO_KEYS.PUB_ENC_KEY]);
+
+        // console.log('enc datas', this.keys[CONST.CRYPTO_KEYS.SEC_ENC_KEY], this.remoteKeys[CONST.CRYPTO_KEYS.PUB_ENC_KEY], parsedConnInfo.data.length);
+
+        const rawPubEncKey = await window.safeCryptoPubEncKey.getRaw(this.keys[CONST.CRYPTO_KEYS.PUB_ENC_KEY]);
+        console.log('rawPubEncKey', rawPubEncKey);
+        const rawSecEncKey = await window.safeCryptoSecEncKey.getRaw(this.keys[CONST.CRYPTO_KEYS.SEC_ENC_KEY]);
+        console.log('rawSecEncKey', rawSecEncKey);
+
+        const encKeyPairHandle = await window.safeCrypto.generateEncKeyPairFromRaw(this.app, rawPubEncKey.buffer, rawSecEncKey.buffer);
+        console.log('encKeyPairHandle', encKeyPairHandle);
+
+        // const buf = new ArrayBuffer(parsedConnInfo.data.length);
+        // const dataBuf = new Uint8Array(buf);
+        // for (var i=0, strLen=parsedConnInfo.data.length; i<strLen; i++) {
+        //   dataBuf[i] = parsedConnInfo.data.charCodeAt(i);
+        // }
+
+        const decryptedData = await window.safeCryptoEncKeyPair.decryptSealed(
+          encKeyPairHandle,
+          new Uint8Array(parsedConnInfo.data));
         console.log('decryptedData', decryptedData);
 
-        const verifiedData = await window.safeCryptoPubSignKey.verify(
-          this.remoteKeys[CONST.CRYPTO_KEYS.PUB_SIGN_KEY],
-          signedData);
-        console.log('verifiedData', verifiedData);
+        // const verifiedData = await window.safeCryptoPubSignKey.verify(
+        //   this.remoteKeys[CONST.CRYPTO_KEYS.PUB_SIGN_KEY],
+        //   signedData);
+        // console.log('verifiedData', verifiedData);
 
         resolve(JSON.stringify({
           state: parsedConnInfo.state,
-          data: verifiedData.toString()
+          data: parsedConnInfo.data.toString()
         }));
       } catch (err) {
         reject(err);
@@ -523,6 +541,46 @@ export default class SafeApi {
           return reject(new Error('channel handle is empty'));
         }
         await this.putConnInfo(connInfo);
+        resolve(true);
+      } catch (err) {
+        reject(err);
+      }
+    });
+  }
+
+
+  testEnc() {
+    return new Promise(async (resolve, reject) => {
+      try {
+        // if (!this.channelMD) {
+        //   return reject(new Error('channel handle is empty'));
+        // }
+        // await this.putConnInfo(connInfo);
+        console.log('test Enc');
+        const keypairH = await window.safeCrypto.generateEncKeyPair(this.app);
+        console.log('keypairH', keypairH);
+
+        const pubH = await window.safeCryptoEncKeyPair.getPubEncKey(keypairH);
+        console.log('pubH', pubH);
+
+        const enc = await window.safeCryptoPubEncKey.encryptSealed(pubH, 'Hello');
+        console.log('enc', enc);
+        const dataStr = String.fromCharCode.apply(null, new Uint8Array(enc))
+        console.log('dataStr', dataStr);
+
+        const buf = new ArrayBuffer(dataStr.length);
+        const dataBuf = new Uint8Array(buf);
+        for (var i=0, strLen=dataStr.length; i<strLen; i++) {
+          dataBuf[i] = dataStr.charCodeAt(i);
+        }
+
+        const dec = await window.safeCryptoEncKeyPair.decryptSealed(
+          keypairH,
+          dataBuf
+        );
+        console.log('dec', dec);
+        console.log('dec str', String.fromCharCode.apply(null, new Uint8Array(dec)));
+
         resolve(true);
       } catch (err) {
         reject(err);

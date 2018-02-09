@@ -1,6 +1,8 @@
 import React, { Component } from 'react';
 import PropTypes from 'prop-types';
+import { inject, observer } from "mobx-react";
 
+@inject("store")
 export default class SelectedPubID extends Component {
   render() {
     return (
@@ -13,7 +15,8 @@ export default class SelectedPubID extends Component {
               className="btn flat primary"
               onClick={(e) => {
                 e.preventDefault();
-                this.props.history.push('switch-id');
+                // this.props.history.push('switch-id');
+                this.props.store.testEnc();
               }}
             >Switch ID</button>
           </div>
