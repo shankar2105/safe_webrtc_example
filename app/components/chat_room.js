@@ -56,7 +56,7 @@ export default class ChatRoom extends Component {
           this.finishConnection();
         }
       });
-    })
+    }, CONST.UI.CONN_TIMER_INTERVAL);
   }
 
   startStream() {

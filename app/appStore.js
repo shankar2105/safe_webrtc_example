@@ -6,11 +6,13 @@ import CONST from './constants';
 import SafeApi from './safe_comm';
 
 export default class AppStore {
+  @observable error = '';
   @observable loading = false;
   @observable loaded = false;
   @observable loaderDesc = CONST.UI.DEFAULT_LOADING_DESC;
   @observable publicNames = [];
   @observable invites = [];
+  @observable newInvites = 0;
   @observable selectedPubName = '';
   @observable connectionState = CONST.CONN_STATE.INIT;
   @observable isNwConnected = true;
@@ -260,11 +262,18 @@ export default class AppStore {
   }
 
   @action
-  fetchInvites() {
+  fetchInvites(isPolling) {
     return new Promise(async (resolve, reject) => {
       try {
-        this.setLoader(true, 'Fetching invites');
+        if (!isPolling) {
+          this.setLoader(true, 'Fetching invites');
+        }
+        const oldCount = this.invites.length;
         this.invites = await this.api.fetchInvites();
+        const diff = this.invites.length - oldCount;
+        if (diff !== 0) {
+          this.newInvites += diff;
+        }
         this.setLoader(false);
         resolve(true);
       } catch (err) {
@@ -289,6 +298,8 @@ export default class AppStore {
   @action
   reset() {
     this.loaded = false;
+    this.error = '';
+    this.setLoader(false);
   }
 
   @action
@@ -373,6 +384,7 @@ export default class AppStore {
         this.setLoader(false, null, true);
         resolve(true);
       } catch (err) {
+        this.error = new Error('Make sure the Callee has initialised with WebRTC app');
         console.log('Connect error :: ', err);
       }
     });
@@ -390,5 +402,10 @@ export default class AppStore {
         console.log('Connected error :: ', err);
       }
     });
+  }
+
+  @action
+  resetFetchCount() {
+    this.newInvites = 0;
   }
 }

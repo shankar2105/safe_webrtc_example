@@ -1,6 +1,7 @@
 import React, { Component } from 'react';
 import PropTypes from 'prop-types';
 import { inject, observer } from "mobx-react";
+import CONST from '../constants';
 
 import SelectedPubID from './selected_pub_id';
 import Loader from './loader';
@@ -8,7 +9,18 @@ import Loader from './loader';
 @inject("store")
 @observer
 export default class Home extends Component {
+  constructor() {
+    super();
+    this.timer = null;
+  }
+
+  componentDidMount() {
+    this.pollInvite();
+  }
+
   componentWillUnmount() {
+    clearInterval(this.timer);
+    this.timer = null;
     this.props.store.reset();
   }
 
@@ -18,6 +30,13 @@ export default class Home extends Component {
         <h3 className="no-pub-name">No Public Name found. Please create one to start using this application.</h3>
       </div>
     )
+  }
+
+  pollInvite() {
+    const { store } = this.props;
+    this.timer = setInterval(() => {
+      store.fetchInvites(true);
+    }, CONST.UI.CONN_TIMER_INTERVAL);
   }
 
   render() {
@@ -46,7 +65,7 @@ export default class Home extends Component {
                 }}
               >
                 <span className="icn"></span>
-                <span className="desc">View Invites</span>
+                <span className="desc">{store.newInvites ? `View Invites (${store.newInvites})*` : 'View Invites'}</span>
               </button>
             </div>
             <div className="choose-chat-i new-chat">

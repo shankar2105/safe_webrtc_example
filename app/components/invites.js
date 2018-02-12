@@ -9,6 +9,7 @@ import Loader from './loader';
 @observer
 export default class Invites extends Component {
   componentWillMount() {
+    this.props.store.resetFetchCount();
     this.props.store.fetchInvites();
   }
 
@@ -26,7 +27,7 @@ export default class Invites extends Component {
 
     return (
       <div className="base">
-        <SelectedPubID pubId={store.selectedPubName} history={history} />
+        <SelectedPubID showBackBtn pubId={store.selectedPubName} history={history} />
         <div className="invites">
           <h3 className="title">You have {store.invites.length} invite(s)</h3>
           <div className="invites-ls">
