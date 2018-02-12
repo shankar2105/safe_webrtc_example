@@ -39,7 +39,7 @@ export default class Invites extends Component {
                     onClick={(e) => {
                       this.onClickInvite(invite);
                     }}
-                  >{invite.publicId} ${invite.uid}</div>
+                  >{invite.publicId} {invite.uid}</div>
                 );
               })
             }
