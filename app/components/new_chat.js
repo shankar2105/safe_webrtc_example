@@ -11,7 +11,7 @@ import Err from './error';
 export default class NewChat extends Component {
   componentWillUpdate() {
     console.log('new chat loaded', this.props.store.loaded);
-    const title = this.title.value;
+    // const title = this.title.value;
     if (this.props.store.loaded) {
       this.props.history.push(`chat-room`);
     }
@@ -25,10 +25,10 @@ export default class NewChat extends Component {
     e.preventDefault();
     console.log('Friend ID', this.friendID.value)
     const friendID = this.friendID.value;
-    const title = this.title.value;
-    if (!friendID || !title) {
-      return;
-    }
+    // const title = this.title.value;
+    // if (!friendID || !title) {
+    //   return;
+    // }
     this.props.store.connect(this.friendID.value);
   }
 
@@ -60,13 +60,13 @@ export default class NewChat extends Component {
                     required="required"
                     ref={(c) => {this.friendID = c;}} />
                 </div>
-                <div className="inpt">
+                {/* <div className="inpt">
                   <input
                     type="text"
                     placeholder="Title"
                     required="required"
                     ref={(c) => {this.title = c;}} />
-                </div>
+                </div> */}
                 <div className="inpt-btn">
                   <button type="submit" className="btn primary">Connect</button>
                 </div>
