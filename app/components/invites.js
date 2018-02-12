@@ -14,7 +14,7 @@ export default class Invites extends Component {
 
   onClickInvite(invite) {
     console.log('invite selected', invite);
-    this.props.history.push(`chat-room/${invite}`);
+    this.props.history.push(`chat-room/${invite.publicId}/${invite.uid}`);
   }
 
   render() {
@@ -39,7 +39,7 @@ export default class Invites extends Component {
                     onClick={(e) => {
                       this.onClickInvite(invite);
                     }}
-                  >{invite}</div>
+                  >{invite.publicId} ${invite.uid}</div>
                 );
               })
             }

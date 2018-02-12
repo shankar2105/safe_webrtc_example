@@ -12,6 +12,7 @@ export default class ChatRoom extends Component {
   constructor() {
     super();
     this.friendID = null;
+    this.friendUID = null;
     this.offerOptions = CONST.CONFIG.OFFER;
     this.mediaOffer = CONST.CONFIG.MEDIA_OFFER;
     this.originStream = null;
@@ -25,8 +26,8 @@ export default class ChatRoom extends Component {
 
   componentDidMount() {
     this.friendID = this.props.match.params.friendId;
-    this.props.store.initialiseConnInfo(this.friendID);
-    console.log('init')
+    this.friendUID = this.props.match.params.uid;
+    this.props.store.initialiseConnInfo(this.friendID, this.friendUID);
     this.startStream()
       .then(() => this.setupOrigin())
       .then(() => this.setupRemote())
@@ -37,18 +38,6 @@ export default class ChatRoom extends Component {
           });
       });
   }
-
-  // componentDidUpdate() {
-  //   const { store } = this.props;
-  //   console.log('update');
-  //   if (store.remoteOffer) {
-  //     this.call();
-  //   }
-
-  //   if(store.answer) {
-  //     this.finishConnection();
-  //   }
-  // }
 
   setTimer(fn) {
     const { store } = this.props;
@@ -71,12 +60,10 @@ export default class ChatRoom extends Component {
   }
 
   startStream() {
-    console.log('origin streaming yet to started')
     return window.navigator.mediaDevices.getUserMedia(this.mediaOffer)
       .then((stream) => {
         this.originStream = stream;
         this.origin.srcObject = stream;
-        console.log('origin streaming started')
       });
   }
 
@@ -86,7 +73,6 @@ export default class ChatRoom extends Component {
       this.originConn.onicecandidate = (e) => {
         if (!e.candidate) {
           this.props.store.setOfferCandidates(this.originCandidates);
-          console.log('offer candidates over')
           if (!this.friendID) {
             this.props.store.sendInvite()
               .then(() => {
@@ -101,12 +87,7 @@ export default class ChatRoom extends Component {
           this.originCandidates = [];
         }
         this.originCandidates.push(e.candidate);
-        console.log('offer candidates len', this.originCandidates.length)
       };
-
-      // this.originConn.oniceconnectionstatechange = function (e) {
-      //   console.log('ice change');
-      // };
 
       this.originConn.addStream(this.originStream);
       resolve();
@@ -125,7 +106,6 @@ export default class ChatRoom extends Component {
               this.setTimer(this.props.store.checkCallAccepted);
             });
           } else {
-            // FIXME check this.friendID exists
             this.props.store.acceptInvite().then(() => {
               this.setTimer(this.props.store.checkForCalling);
             });
@@ -138,10 +118,6 @@ export default class ChatRoom extends Component {
         this.destCandidates.push(e.candidate);
       };
 
-      // this.destConn.oniceconnectionstatechange = function (e) {
-      //   // this.onIceStateChange(pc1, e);
-      // };
-
       this.destConn.onaddstream = (e) => {
         this.destinaton.srcObject = e.stream;
       }
@@ -153,7 +129,6 @@ export default class ChatRoom extends Component {
     const { store } = this.props;
     this.destConn.setRemoteDescription(store.remoteOffer)
       .then(() => {
-        console.log('set destination remote session success');
         return Promise.all(store.remoteOfferCandidates.map((can) => {
           return this.destConn.addIceCandidate(new RTCIceCandidate(can))
             .then(() => {
@@ -254,7 +229,6 @@ export default class ChatRoom extends Component {
     const { store } = this.props;
     this.originConn.setRemoteDescription(store.remoteAnswer)
     .then(() => {
-        console.log('set origin remote session success');
         Promise.all(store.remoteAnswerCandidates.map((can) => {
           return this.originConn.addIceCandidate(new RTCIceCandidate(can))
             .then(() => {
@@ -273,8 +247,6 @@ export default class ChatRoom extends Component {
   render() {
     const { match } = this.props;
 
-    // const friendId = match.params.friendId;
-    console.log('render chat');
     return (
       <div className="chat-room">
         <div className="chat-room-b">

@@ -44,8 +44,21 @@ export default class SafeApi {
     return JSON.stringify(connInfo);
   }
 
+  bufToArr(buf) {
+    if (!(buf instanceof Uint8Array)) {
+      throw new Error('buf is not instance of Uint8Array');
+    }
+    return Array.from(buf);
+  }
+
+  arrToBuf(arr) {
+    if (!(arr instanceof Array)) {
+      throw new Error('arr is not instance of Array');
+    }
+    return new Uint8Array(arr);
+  }
+
   _setKeys(keys) {
-    console.log('set keys', keys);
     if (keys) {
       this.keys = keys;
       return Promise.resolve(true);
@@ -100,35 +113,45 @@ export default class SafeApi {
 
         this.channelMD = await window.safeMutableData.newRandomPrivate(this.app, CONST.TYPE_TAG.CHANNEL);
         const keysHandle = {};
-        // insert keys
+
+        // Application keys
         const signKeyPairHandle = await window.safeCrypto.generateSignKeyPair(this.app);
 
+        // public sign key
         const pubSignKey = await window.safeCryptoSignKeyPair.getPubSignKey(signKeyPairHandle);
         keysHandle[CONST.CRYPTO_KEYS.PUB_SIGN_KEY] = pubSignKey;
         const pubSignKeyRaw = await window.safeCryptoPubSignKey.getRaw(pubSignKey);
-        const pubSignKeyStr = pubSignKeyRaw.buffer.toString('hex');
+        const pubSignKeyArr = this.bufToArr(pubSignKeyRaw.buffer);
+        // const pubSignKeyStr = pubSignKeyRaw.buffer.toString('hex');
 
+        // secret sign key
         const secSignKey = await window.safeCryptoSignKeyPair.getSecSignKey(signKeyPairHandle);
         keysHandle[CONST.CRYPTO_KEYS.SEC_SIGN_KEY] = secSignKey;
         const secSignKeyRaw = await window.safeCryptoSecSignKey.getRaw(secSignKey);
-        const secSignKeyStr = secSignKeyRaw.buffer.toString('hex');
+        const secSignKeyArr = this.bufToArr(secSignKeyRaw.buffer);
+        // const secSignKeyStr = secSignKeyRaw.buffer.toString('hex');
 
         const encKeyPairHandle = await window.safeCrypto.generateEncKeyPair(this.app);
+
+        // public encryption key
         const pubEncKey = await window.safeCryptoEncKeyPair.getPubEncKey(encKeyPairHandle);
         keysHandle[CONST.CRYPTO_KEYS.PUB_ENC_KEY] = pubEncKey;
         const pubEncKeyRaw = await window.safeCryptoPubEncKey.getRaw(pubEncKey);
-        const pubEncKeyStr = pubEncKeyRaw.buffer.toString('hex');
+        const pubEncKeyArr = this.bufToArr(pubEncKeyRaw.buffer);
+        // const pubEncKeyStr = pubEncKeyRaw.buffer.toString('hex');
 
+        // secret encryption key
         const secEncKey = await window.safeCryptoEncKeyPair.getSecEncKey(encKeyPairHandle);
         keysHandle[CONST.CRYPTO_KEYS.SEC_ENC_KEY] = secEncKey;
         const secEncKeyRaw = await window.safeCryptoSecEncKey.getRaw(secEncKey);
-        const secEncKeyStr = secEncKeyRaw.buffer.toString('hex');
+        const secEncKeyArr = this.bufToArr(secEncKeyRaw.buffer);
+        // const secEncKeyStr = secEncKeyRaw.buffer.toString('hex');
 
         const entries = {};
-        entries[CONST.CRYPTO_KEYS.PUB_SIGN_KEY] = pubSignKeyStr;
-        entries[CONST.CRYPTO_KEYS.SEC_SIGN_KEY] = secSignKeyStr;
-        entries[CONST.CRYPTO_KEYS.PUB_ENC_KEY] = pubEncKeyStr;
-        entries[CONST.CRYPTO_KEYS.SEC_ENC_KEY] = secEncKeyStr;
+        entries[CONST.CRYPTO_KEYS.PUB_SIGN_KEY] = pubSignKeyArr;
+        entries[CONST.CRYPTO_KEYS.SEC_SIGN_KEY] = secSignKeyArr;
+        entries[CONST.CRYPTO_KEYS.PUB_ENC_KEY] = pubEncKeyArr;
+        entries[CONST.CRYPTO_KEYS.SEC_ENC_KEY] = secEncKeyArr;
         await window.safeMutableData.quickSetup(this.channelMD, entries, 'WebRTC Channel', `WebRTC channel for ${hostName}`);
 
         // create a new permission set
@@ -187,20 +210,22 @@ export default class SafeApi {
     });
   }
 
-  _checkServiceContainerAccess() {
+  _checkServiceContainerAccess(mdHandle) {
     return new Promise(async (resolve, reject) => {
       try {
         if (!this.serviceCntr) {
           return reject(new Error('service container handle is empty'));
         }
 
-        const perms = await window.safeMutableData.getPermissions(this.serviceCntr);
+        // const perms = await window.safeMutableData.getPermissions(this.serviceCntr);
         const appSignKey = await window.safeCrypto.getAppPubSignKey(this.app);
-        const result = await window.safeMutableDataPermissions.getPermissionsSet(perms, appSignKey);
+        const result = await window.safeMutableData.getUserPermissions(mdHandle, appSignKey);
+        // const result = await window.safeMutableDataPermissions.getPermissionsSet(perms, appSignKey);
 
         resolve(true);
       } catch (err) {
-        if (err.code !== -1011) {
+        // if (err.code !== -1011) {
+        if (err.message !== 'Core error: Routing client error -> Key does not exists') {
           return reject(err);
         }
         const serviceCntrInfo = await window.safeMutableData.getNameAndTag(this.serviceCntr);
@@ -282,7 +307,7 @@ export default class SafeApi {
         this.serviceCntr = await window.safeMutableData.newPublic(this.app, decServiceCntr, CONST.TYPE_TAG.DNS);
 
         // check for access
-        await this._checkServiceContainerAccess();
+        await this._checkServiceContainerAccess(this.serviceCntr);
 
         try {
           // search for webrtc mdata
@@ -291,11 +316,13 @@ export default class SafeApi {
           this.channelMD = await window.safeMutableData.fromSerial(this.app, channelSerial.buf);
           await this._setKeys(null);
         } catch (e) {
-          if (e.code !== CONST.ERR_CODE.NO_SUCH_ENTRY) {
+          // if (e.code !== CONST.ERR_CODE.NO_SUCH_ENTRY) {
+          if (e.message !== 'Core error: Routing client error -> Requested entry not found') {
             throw e;
           }
           await this._createChannel();
         }
+        this.checkSign();
         resolve(true);
       } catch (err) {
         reject(err);
@@ -320,13 +347,18 @@ export default class SafeApi {
         const entriesHandle = await window.safeMutableData.getEntries(this.channelMD);
         await window.safeMutableDataEntries.forEach(entriesHandle, (k, v) => {
           const keyStr = k.toString();
+          console.log('keyStr', keyStr);
           if (!whiteListKeys.includes(keyStr)) {
             const dataArr = keyStr.split(keySeparator);
-            if (dataArr.length == 2 && dataArr[1] === CONST.CONN_STATE.SEND_INVITE) {
-              invites.push(dataArr[0]);
+            if (dataArr.length == 3 && dataArr[1] === CONST.CONN_STATE.SEND_INVITE) {
+              invites.push({
+                publicId: dataArr[0],
+                uid: dataArr[2]
+              });
             }
           }
         });
+        console.log('invites', invites);
         resolve(invites);
       } catch (err) {
         reject(err);
@@ -354,18 +386,20 @@ export default class SafeApi {
     });
   }
 
-  _getDataKey(initiater, state) {
+  _getDataKey(initiater, state, id) {
+    console.log('_getDataKey', initiater, state);
     let dataKey = null;
     if (!state) {
-      dataKey = `${initiater}${keySeparator}${CONST.CONN_STATE.SEND_INVITE}`;
+      dataKey = `${initiater}${keySeparator}${CONST.CONN_STATE.SEND_INVITE}${keySeparator}${id}`;
     } else if (state === CONST.CONN_STATE.SEND_INVITE || state === CONST.CONN_STATE.CALLING) {
-      dataKey = `${initiater}${keySeparator}${state}`;
+      dataKey = `${initiater}${keySeparator}${state}${keySeparator}${id}`;
     } else {
-      let dataKey = `${initiater}${keySeparator}${CONST.CONN_STATE.SEND_INVITE}`;
+      dataKey = `${initiater}${keySeparator}${CONST.CONN_STATE.SEND_INVITE}${keySeparator}${id}`;
       if (state === CONST.CONN_STATE.CONNECTED) {
-        dataKey = `${initiater}${keySeparator}${CONST.CONN_STATE.CALLING}`;
+        dataKey = `${initiater}${keySeparator}${CONST.CONN_STATE.CALLING}${keySeparator}${id}`;
       }
     }
+    console.log('dataKey', dataKey);
     return dataKey;
   }
 
@@ -384,28 +418,24 @@ export default class SafeApi {
 
         const data = this.stringify(connInfo.data);
 
-        // sign the data
-        // const signedData = await window.safeCryptoSecSignKey.sign(this.keys[CONST.CRYPTO_KEYS.SEC_SIGN_KEY], data);
-        // console.log('put signed', signedData);
+        const encryptedData = await window.safeCryptoPubEncKey.encryptSealed(this.remoteKeys[CONST.CRYPTO_KEYS.PUB_ENC_KEY], data);
+        console.log('encryptedData', encryptedData)
 
-        // // encrypt the signed data
-        // const encryptedData = await window.safeCryptoPubEncKey.encrypt(
-        //   this.remoteKeys[CONST.CRYPTO_KEYS.PUB_ENC_KEY],
-        //   data,
-        //   this.keys[CONST.CRYPTO_KEYS.SEC_ENC_KEY]
-        // );
+        const encDataArr = Array.from(encryptedData);
 
-        const encryptedData = await window.safeCryptoPubEncKey.encryptSealed(this.remoteKeys[CONST.CRYPTO_KEYS.PUB_ENC_KEY], 'data hello');
-        console.log('encryptedData', encryptedData, new Uint8Array(encryptedData))
-        const dataArr = Array.from(new Uint8Array(encryptedData));
-        console.log('put enc data', dataArr);
+        // const signedData = await window.safeCryptoSecSignKey.sign(this.keys[CONST.CRYPTO_KEYS.SEC_SIGN_KEY], JSON.stringify(encDataArr));
+        // console.log('signedData', signedData);
 
-        const dataKey = this._getDataKey(connInfo.data.initiater, connInfo.state);
+        // const dataArr = Array.from(signedData);
+        // console.log('put sign data', dataArr);
+
+        const dataKey = this._getDataKey(connInfo.data.initiater, connInfo.state, connInfo.uid);
         console.log('put data key', dataKey);
 
         const connInfoStr = this.stringify({
           state: connInfo.state,
-          data: dataArr
+          uid: connInfo.uid,
+          data: encDataArr
         });
 
         // insert if it is caller
@@ -428,17 +458,17 @@ export default class SafeApi {
     });
   }
 
-  fetchConnInfo(connInfo) {
+  fetchConnInfo(connInfo, state) {
+    const isCaller = (connInfo.data.persona === CONST.USER_POSITION.CALLER);
     return new Promise(async (resolve, reject) => {
       try {
         console.log('fetch conn info :: ', connInfo);
-        const isCaller = (connInfo.data.persona === CONST.USER_POSITION.CALLER);
         const channelMD = isCaller ? this.remoteChannelMD : this.channelMD;
         if (!channelMD) {
           return reject(new Error('channel not set'));
         }
 
-        const dataKey = this._getDataKey(connInfo.data.initiater, connInfo.state);
+        const dataKey = this._getDataKey(connInfo.data.initiater, state || connInfo.state, connInfo.uid);
         console.log('fetch conn info data key :: ', connInfo, dataKey);
 
         const connStr = await window.safeMutableData.get(channelMD, dataKey);
@@ -457,6 +487,11 @@ export default class SafeApi {
         }
 
         // console.log('enc datas', this.keys[CONST.CRYPTO_KEYS.SEC_ENC_KEY], this.remoteKeys[CONST.CRYPTO_KEYS.PUB_ENC_KEY], parsedConnInfo.data.length);
+        console.log('parsedConnInfo.data', parsedConnInfo.data);
+        // const verifiedData = await window.safeCryptoPubSignKey.verify(
+        //   this.remoteKeys[CONST.CRYPTO_KEYS.PUB_SIGN_KEY],
+        //   new Uint8Array(parsedConnInfo.data));
+        // console.log('verifiedData', verifiedData);
 
         const rawPubEncKey = await window.safeCryptoPubEncKey.getRaw(this.keys[CONST.CRYPTO_KEYS.PUB_ENC_KEY]);
         console.log('rawPubEncKey', rawPubEncKey);
@@ -466,33 +501,35 @@ export default class SafeApi {
         const encKeyPairHandle = await window.safeCrypto.generateEncKeyPairFromRaw(this.app, rawPubEncKey.buffer, rawSecEncKey.buffer);
         console.log('encKeyPairHandle', encKeyPairHandle);
 
-        // const buf = new ArrayBuffer(parsedConnInfo.data.length);
-        // const dataBuf = new Uint8Array(buf);
-        // for (var i=0, strLen=parsedConnInfo.data.length; i<strLen; i++) {
-        //   dataBuf[i] = parsedConnInfo.data.charCodeAt(i);
-        // }
+        console.log('parsedConnInfo', parsedConnInfo);
 
         const decryptedData = await window.safeCryptoEncKeyPair.decryptSealed(
           encKeyPairHandle,
           new Uint8Array(parsedConnInfo.data));
-        console.log('decryptedData', decryptedData);
+        console.log('decryptedData', decryptedData.toString());
 
-        // const verifiedData = await window.safeCryptoPubSignKey.verify(
-        //   this.remoteKeys[CONST.CRYPTO_KEYS.PUB_SIGN_KEY],
-        //   signedData);
-        // console.log('verifiedData', verifiedData);
 
         resolve(JSON.stringify({
           state: parsedConnInfo.state,
-          data: parsedConnInfo.data.toString()
+          uid: parsedConnInfo.uid,
+          data: JSON.parse(decryptedData.toString())
         }));
       } catch (err) {
-        reject(err);
+        if (err.message !== 'Core error: Routing client error -> Requested entry not found') {
+          return reject(err);
+        }
+
+        if (!isCaller && connInfo.state && (connInfo.state === CONST.CONN_STATE.INVITE_ACCEPTED)) {
+          return resolve(JSON.stringify(connInfo));
+        }
+
+        return reject(err);
       }
     });
   }
 
   sendInvite(connInfo) {
+    console.log('sendInvite', connInfo);
     return new Promise(async (resolve, reject) => {
       try {
         if (!this.remoteChannelMD) {
@@ -507,6 +544,7 @@ export default class SafeApi {
   }
 
   acceptInvite(connInfo) {
+    console.log('acceptInvite', connInfo);
     return new Promise(async (resolve, reject) => {
       try {
         if (!this.channelMD) {
@@ -521,6 +559,7 @@ export default class SafeApi {
   }
 
   calling(connInfo) {
+    console.log('calling', connInfo);
     return new Promise(async (resolve, reject) => {
       try {
         if (!this.remoteChannelMD) {
@@ -535,6 +574,7 @@ export default class SafeApi {
   }
 
   connected(connInfo) {
+    console.log('connected', connInfo);
     return new Promise(async (resolve, reject) => {
       try {
         if (!this.channelMD) {
@@ -548,38 +588,22 @@ export default class SafeApi {
     });
   }
 
-
-  testEnc() {
+  checkSign() {
     return new Promise(async (resolve, reject) => {
       try {
-        // if (!this.channelMD) {
-        //   return reject(new Error('channel handle is empty'));
-        // }
-        // await this.putConnInfo(connInfo);
-        console.log('test Enc');
-        const keypairH = await window.safeCrypto.generateEncKeyPair(this.app);
-        console.log('keypairH', keypairH);
+        const signKeyPairHandle = await window.safeCrypto.generateSignKeyPair(this.app);
 
-        const pubH = await window.safeCryptoEncKeyPair.getPubEncKey(keypairH);
-        console.log('pubH', pubH);
+        const secSignKeyHandle = await window.safeCryptoSignKeyPair.getSecSignKey(signKeyPairHandle);
 
-        const enc = await window.safeCryptoPubEncKey.encryptSealed(pubH, 'Hello');
-        console.log('enc', enc);
-        const dataStr = String.fromCharCode.apply(null, new Uint8Array(enc))
-        console.log('dataStr', dataStr);
+        const data = 'plain text data to be signed';
+        const signedData = await window.safeCryptoSecSignKey.sign(secSignKeyHandle, data);
 
-        const buf = new ArrayBuffer(dataStr.length);
-        const dataBuf = new Uint8Array(buf);
-        for (var i=0, strLen=dataStr.length; i<strLen; i++) {
-          dataBuf[i] = dataStr.charCodeAt(i);
-        }
+        console.log('signedData', signedData);
 
-        const dec = await window.safeCryptoEncKeyPair.decryptSealed(
-          keypairH,
-          dataBuf
-        );
-        console.log('dec', dec);
-        console.log('dec str', String.fromCharCode.apply(null, new Uint8Array(dec)));
+        const pubSignKeyHandle = await window.safeCryptoSignKeyPair.getPubSignKey(signKeyPairHandle);
+        const verifiedData = await window.safeCryptoPubSignKey.verify(pubSignKeyHandle, signedData);
+
+        console.log('verifiedData', verifiedData);
 
         resolve(true);
       } catch (err) {

@@ -10,7 +10,7 @@ import ChatRoom from './components/chat_room';
 export default () => (
   <App>
     <Switch>
-      <Route path="/chat-room/:friendId?" component={ChatRoom} />
+      <Route path="/chat-room/:friendId?/:uid?" component={ChatRoom} />
       <Route path="/new-chat" component={NewChat} />
       <Route path="/invites" component={Invites} />
       <Route path="/switch-id" component={SwitchID} />

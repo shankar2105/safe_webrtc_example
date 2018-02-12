@@ -16,7 +16,8 @@ export default class AppStore {
   @observable isNwConnected = true;
   @observable isNwConnecting = false;
 
-  @observable callerID = null;
+  @observable uid = null;
+  @observable initiater = null;
   @observable persona = null;
   @observable state = null;
   @observable offer = null;
@@ -33,10 +34,59 @@ export default class AppStore {
     this.connInfo = null;
   }
 
-  @action
-  timeout(ms) {
-    return new Promise((resolve) => setTimeout(resolve, ms));
+  createUid() {
+    return new Date().getTime();
   }
+
+  transformConnInfo() {
+    const isCaller = (this.persona === CONST.USER_POSITION.CALLER);
+    const res = {
+      state: this.state,
+      uid: this.uid
+    };
+    const obj = {};
+    obj['persona'] = this.persona;
+    obj['initiater'] = this.initiater;
+    obj['caller'] = {};
+    obj['callee'] = {};
+    obj.caller['offer'] = isCaller ? this.offer : this.remoteOffer;
+    obj.caller['offerCandidates'] = isCaller ? this.offerCandidates : this.remoteOfferCandidates;
+    obj.caller['answer'] = isCaller ? this.answer : this.remoteAnswer;
+    obj.caller['answerCandidates'] = isCaller ? this.answerCandidates : this.remoteAnswerCandidates;
+    obj.callee['offer'] = isCaller ? this.remoteOffer : this.offer;
+    obj.callee['offerCandidates'] = isCaller ? this.remoteOfferCandidates : this.offerCandidates;
+    obj.callee['answer'] = isCaller ? this.remoteAnswer : this.answer;
+    obj.callee['answerCandidates'] = isCaller ? this.remoteAnswerCandidates : this.answerCandidates;
+
+    res.data = obj;
+    return res;
+  }
+
+  parseConnStr(connStr) {
+    const obj = {};
+    const parsedObj = JSON.parse(connStr);
+    obj['state'] = parsedObj.state;
+    obj['uid'] = parsedObj.uid;
+
+    const data = parsedObj.data;
+    obj['initiater'] = data.initiater;
+    obj['caller'] = {};
+    obj['callee'] = {};
+    obj.caller['offer'] = data.caller.offer;
+    obj.caller['offerCandidates'] = data.caller.offerCandidates;
+    obj.caller['answer'] = data.caller.answer;
+    obj.caller['answerCandidates'] = data.caller.answerCandidates;
+    obj.callee['offer'] = data.callee.offer;
+    obj.callee['offerCandidates'] = data.callee.offerCandidates;
+    obj.callee['answer'] = data.callee.answer;
+    obj.callee['answerCandidates'] = data.callee.answerCandidates;
+    return obj;
+  }
+
+  // @action
+  // timeout(ms) {
+  //   return new Promise((resolve) => setTimeout(resolve, ms));
+  // }
 
   @action
   setLoader(state, desc, isloaded) {
@@ -46,18 +96,20 @@ export default class AppStore {
   }
 
   @action
-  createConn(id, persona) {
-    this.callerID = id;
+  createConn(initiater, persona, uid) {
+    this.initiater = initiater;
+    this.uid = uid;
     this.persona = persona;
   }
 
   @action
-  setCallerID(id) {
-    this.callerID = id;
+  setInitiater(initiater) {
+    this.initiater = initiater;
   }
 
   @action
   setConnState(state) {
+    this.connectionState = state;
     this.state = state;
   }
 
@@ -81,57 +133,12 @@ export default class AppStore {
     this.remoteAnswerCandidates = candidates;
   }
 
-  transformConnInfo() {
-    const isCaller = (this.persona === CONST.USER_POSITION.CALLER);
-    const res = {
-      state: this.state
-    };
-    const obj = {};
-    obj['persona'] = this.persona;
-    obj['initiater'] = this.callerID;
-    // obj['state'] = this.state;
-    obj['caller'] = {};
-    obj['callee'] = {};
-    obj.caller['offer'] = isCaller ? this.offer : this.remoteOffer;
-    obj.caller['offerCandidates'] = isCaller ? this.offerCandidates : this.remoteOfferCandidates;
-    obj.caller['answer'] = isCaller ? this.answer : this.remoteAnswer;
-    obj.caller['answerCandidates'] = isCaller ? this.answerCandidates : this.remoteAnswerCandidates;
-    obj.callee['offer'] = isCaller ? this.remoteOffer : this.offer;
-    obj.callee['offerCandidates'] = isCaller ? this.remoteOfferCandidates : this.offerCandidates;
-    obj.callee['answer'] = isCaller ? this.remoteAnswer : this.answer;
-    obj.callee['answerCandidates'] = isCaller ? this.remoteAnswerCandidates : this.answerCandidates;
-
-    res.data = obj;
-    return res;
-  }
-
-  parseConnStr(connStr) {
-    const obj = {};
-    const parsedObj = JSON.parse(connStr);
-    obj['state'] = parsedObj.state;
-
-    const data = parsedObj.data;
-    obj['initiater'] = data.initiater;
-    obj['caller'] = {};
-    obj['callee'] = {};
-    obj.caller['offer'] = data.caller.offer;
-    obj.caller['offerCandidates'] = data.caller.offerCandidates;
-    obj.caller['answer'] = data.caller.answer;
-    obj.caller['answerCandidates'] = data.caller.answerCandidates;
-    obj.callee['offer'] = data.callee.offer;
-    obj.callee['offerCandidates'] = data.callee.offerCandidates;
-    obj.callee['answer'] = data.callee.answer;
-    obj.callee['answerCandidates'] = data.callee.answerCandidates;
-    return obj;
-  }
-
   @action
   checkInviteAccepted() {
     return new Promise(async (resolve, reject) => {
       try {
         const connInfo = this.transformConnInfo();
         const connStr = await this.api.fetchConnInfo(connInfo);
-        console.log('check invted accpedyed', connStr);
         const parsedConnInfo = this.parseConnStr(connStr);
         if (parsedConnInfo.state === CONST.CONN_STATE.INVITE_ACCEPTED) {
           this.setRemoteOffer(parsedConnInfo.callee.offer);
@@ -139,12 +146,9 @@ export default class AppStore {
           this.setRemoteAnswer(parsedConnInfo.callee.answer);
           this.setRemoteAnswerCandidates(parsedConnInfo.callee.answerCandidates);
           const connInfo1 = this.transformConnInfo();
-          console.log('conn info on chekc', connInfo1);
           return resolve(true);
         }
         resolve(false);
-        // await this.timeout(CONST.UI.CONN_TIMER_INTERVAL);
-        // this.checkInviteAccepted();
       } catch (err) {
         reject(err);
       }
@@ -163,8 +167,6 @@ export default class AppStore {
           return resolve(true);
         }
         resolve(false);
-        // await this.timeout(CONST.UI.CONN_TIMER_INTERVAL);
-        // this.checkCallAccepted();
       } catch (err) {
         reject(err);
       }
@@ -176,21 +178,23 @@ export default class AppStore {
     return new Promise(async (resolve, reject) => {
       try {
         const connInfo = this.transformConnInfo();
-        const connStr = await this.api.fetchConnInfo(connInfo);
+        const connStr = await this.api.fetchConnInfo(connInfo, CONST.CONN_STATE.CALLING);
         const parsedConnInfo = this.parseConnStr(connStr);
-        console.log('checkForCalling', parsedConnInfo);
         if (parsedConnInfo.state === CONST.CONN_STATE.CALLING) {
           this.setRemoteAnswer(parsedConnInfo.caller.answer);
           this.setRemoteAnswerCandidates(parsedConnInfo.caller.answerCandidates);
           return resolve(true);
         }
         resolve(false);
-        // await this.timeout(CONST.UI.CONN_TIMER_INTERVAL);
-        // this.checkForCalling();
       } catch (err) {
         reject(err);
       }
     });
+  }
+
+  @action
+  setUid(uid) {
+    this.uid = uid;
   }
 
   @action
@@ -205,25 +209,21 @@ export default class AppStore {
   @action
   setOffer(offer) {
     this.offer = offer;
-    // this.connInfo.setOffer(offer);
   }
 
   @action
   setAnswer(answer) {
     this.answer = answer;
-    // this.connInfo.setAnswer(answer);
   }
 
   @action
   setOfferCandidates(candidates) {
     this.offerCandidates = candidates;
-    // this.connInfo.setOfferCandidates(candidates);
   }
 
   @action
   setAnswerCandidates(candidates) {
     this.answerCandidates = candidates;
-    // this.connInfo.setAnswerCandidates(candidates);
   }
 
   @action
@@ -234,7 +234,6 @@ export default class AppStore {
         this.api = new SafeApi(this.nwStateCb);
         await this.api.authorise();
         this.setLoader(false);
-        console.log('authorised');
         resolve(true);
       } catch (err) {
         console.error(`Authorisation error :: ${err}`);
@@ -248,9 +247,7 @@ export default class AppStore {
       try {
         this.setLoader(true, 'Fetching public names');
         this.publicNames = await this.api.getPublicNames();
-        console.log('this.publicNames', this.publicNames);
         if (this.publicNames.length !== 0 && !this.selectedPubName) {
-          console.log('setting up')
           this.setLoader(true, 'Initializing');
           this.selectedPubName = this.publicNames[0];
           await this.api.setupPublicName(this.selectedPubName);
@@ -295,7 +292,7 @@ export default class AppStore {
   }
 
   @action
-  initialiseConnInfo(friendID) {
+  initialiseConnInfo(friendID, friendUID) {
     return new Promise(async(resolve, reject) => {
       try {
         if (friendID) {
@@ -303,15 +300,16 @@ export default class AppStore {
         }
         const isCallee = !!friendID;
         const userPosition = isCallee ? CONST.USER_POSITION.CALLEE : CONST.USER_POSITION.CALLER;
-        this.createConn(this.selectedPubName, userPosition);
+        const uid = friendUID || this.createUid();
+        this.createConn(this.selectedPubName, userPosition, uid);
         if (isCallee) {
-          this.setCallerID(friendID);
+          this.setInitiater(friendID);
           const connInfo = this.transformConnInfo();
           const connInfoStr = await this.api.fetchConnInfo(connInfo);
           const parsedJson = this.parseConnStr(connInfoStr);
+          this.setUid(parsedJson.uid);
           this.setRemoteOffer(parsedJson.caller.offer);
           this.setRemoteOfferCandidates(parsedJson.caller.offerCandidates);
-          console.log('conn init :: ', this.connInfo);
         }
         resolve(true);
       } catch (err) {
@@ -325,13 +323,9 @@ export default class AppStore {
   sendInvite() {
     return new Promise(async (resolve, reject) => {
       try {
-        // FIXME remove this.connectionState and handle with connInfo.state
-        this.connectionState = CONST.CONN_STATE.SEND_INVITE;
-        this.setConnState(this.connectionState);
+        this.setConnState(CONST.CONN_STATE.SEND_INVITE);
         const connInfo = this.transformConnInfo();
         await this.api.sendInvite(connInfo);
-        // update data
-        // await this.checkInviteAccepted();
         resolve(true);
       } catch (err) {
         console.error('Send invite error :: ', err);
@@ -345,12 +339,9 @@ export default class AppStore {
   acceptInvite() {
     return new Promise(async (resolve, reject) => {
       try {
-        this.connectionState = CONST.CONN_STATE.INVITE_ACCEPTED;
-        this.setConnState(this.connectionState);
+        this.setConnState(CONST.CONN_STATE.INVITE_ACCEPTED);
         const connInfo = this.transformConnInfo();
         await this.api.acceptInvite(connInfo);
-        // update data
-        // this.checkForCalling();
         resolve(true);
       } catch (err) {
         console.error('Accept invite error :: ', err);
@@ -363,12 +354,9 @@ export default class AppStore {
   calling() {
     return new Promise(async (resolve) => {
       try {
-        this.connectionState = CONST.CONN_STATE.CALLING;
-        this.setConnState(this.connectionState);
+        this.setConnState(CONST.CONN_STATE.CALLING);
         const connInfo = this.transformConnInfo();
         await this.api.calling(connInfo);
-        // update data
-        // this.checkCallAccepted();
         resolve(true);
       } catch (err) {
         console.error('Calling error :: ', err);
@@ -390,23 +378,17 @@ export default class AppStore {
     });
   }
 
+  @action
   connected() {
     return new Promise(async (resolve) => {
       try {
-        this.connectionState = CONST.CONN_STATE.CONNECTED;
-        this.setConnState(this.connectionState);
+        this.setConnState(CONST.CONN_STATE.CONNECTED);
         const connInfo = this.transformConnInfo();
         await this.api.connected(connInfo);
-        // update data
-        this.checkCallAccepted();
         resolve(true);
       } catch (err) {
         console.log('Connected error :: ', err);
       }
     });
-  }
-
-  testEnc() {
-    this.api.testEnc();
   }
 }
