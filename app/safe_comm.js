@@ -122,13 +122,13 @@ export default class SafeApi {
         const pubSignKey = await window.safeCryptoSignKeyPair.getPubSignKey(signKeyPairHandle);
         keysHandle[CONST.CRYPTO_KEYS.PUB_SIGN_KEY] = pubSignKey;
         const pubSignKeyRaw = await window.safeCryptoPubSignKey.getRaw(pubSignKey);
-        const pubSignKeyArr = this.bufToArr(pubSignKeyRaw.buffer);
+        const pubSignKeyArr = utils.bufToArr(pubSignKeyRaw.buffer);
 
         // secret sign key
         const secSignKey = await window.safeCryptoSignKeyPair.getSecSignKey(signKeyPairHandle);
         keysHandle[CONST.CRYPTO_KEYS.SEC_SIGN_KEY] = secSignKey;
         const secSignKeyRaw = await window.safeCryptoSecSignKey.getRaw(secSignKey);
-        const secSignKeyArr = this.bufToArr(secSignKeyRaw.buffer);
+        const secSignKeyArr = utils.bufToArr(secSignKeyRaw.buffer);
 
         utils.putLog('Generate Encvryption key pairs');
 
@@ -138,13 +138,13 @@ export default class SafeApi {
         const pubEncKey = await window.safeCryptoEncKeyPair.getPubEncKey(encKeyPairHandle);
         keysHandle[CONST.CRYPTO_KEYS.PUB_ENC_KEY] = pubEncKey;
         const pubEncKeyRaw = await window.safeCryptoPubEncKey.getRaw(pubEncKey);
-        const pubEncKeyArr = this.bufToArr(pubEncKeyRaw.buffer);
+        const pubEncKeyArr = utils.bufToArr(pubEncKeyRaw.buffer);
 
         // secret encryption key
         const secEncKey = await window.safeCryptoEncKeyPair.getSecEncKey(encKeyPairHandle);
         keysHandle[CONST.CRYPTO_KEYS.SEC_ENC_KEY] = secEncKey;
         const secEncKeyRaw = await window.safeCryptoSecEncKey.getRaw(secEncKey);
-        const secEncKeyArr = this.bufToArr(secEncKeyRaw.buffer);
+        const secEncKeyArr = utils.bufToArr(secEncKeyRaw.buffer);
 
         const entries = {};
         entries[CONST.CRYPTO_KEYS.PUB_SIGN_KEY] = pubSignKeyArr;

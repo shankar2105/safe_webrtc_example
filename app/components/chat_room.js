@@ -39,6 +39,10 @@ export default class ChatRoom extends Component {
       });
   }
 
+  componentWillUnmount() {
+    clearTimeout(this.timer);
+  }
+
   setTimer(fn) {
     const { store } = this.props;
     this.timer = setTimeout(() => {
