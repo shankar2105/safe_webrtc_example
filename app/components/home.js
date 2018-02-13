@@ -19,7 +19,7 @@ export default class Home extends Component {
   }
 
   componentWillUnmount() {
-    clearInterval(this.timer);
+    clearTimeout(this.timer);
     this.timer = null;
     this.props.store.reset();
   }
@@ -34,8 +34,13 @@ export default class Home extends Component {
 
   pollInvite() {
     const { store } = this.props;
-    this.timer = setInterval(() => {
-      store.fetchInvites(true);
+    const self = this;
+    const poll = () => {
+      clearTimeout(self.timer);
+      self.pollInvite();
+    };
+    this.timer = setTimeout(() => {
+      store.fetchInvites(true).then(poll, poll);
     }, CONST.UI.CONN_TIMER_INTERVAL);
   }
 

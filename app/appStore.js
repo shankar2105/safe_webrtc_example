@@ -33,6 +33,7 @@ export default class AppStore {
 
   constructor() {
     this.api = null;
+    this.isAuthorised = false;
     this.connInfo = null;
   }
 
@@ -89,6 +90,23 @@ export default class AppStore {
   // timeout(ms) {
   //   return new Promise((resolve) => setTimeout(resolve, ms));
   // }
+
+  @action
+  resetConnInfo() {
+    this.connInfo = null;
+    this.uid = null;
+    this.initiater = null;
+    this.persona = null;
+    this.state = null;
+    this.offer = null;
+    this.answer = null;
+    this.offerCandidates = [];
+    this.answerCandidates = [];
+    this.remoteOffer = null;
+    this.remoteAnswer = null;
+    this.remoteOfferCandidates = [];
+    this.remoteAnswerCandidates = [];
+  }
 
   @action
   setLoader(state, desc, isloaded) {
@@ -235,6 +253,7 @@ export default class AppStore {
         this.setLoader(true, 'Authorising application');
         this.api = new SafeApi(this.nwStateCb);
         await this.api.authorise();
+        this.isAuthorised = true;
         this.setLoader(false);
         resolve(true);
       } catch (err) {
@@ -265,19 +284,25 @@ export default class AppStore {
   fetchInvites(isPolling) {
     return new Promise(async (resolve, reject) => {
       try {
+
+        if (isPolling && !this.isAuthorised) {
+          resolve(true);
+        }
+
         if (!isPolling) {
           this.setLoader(true, 'Fetching invites');
         }
         const oldCount = this.invites.length;
         this.invites = await this.api.fetchInvites();
         const diff = this.invites.length - oldCount;
-        if (diff !== 0) {
+        if (diff >= 1) {
           this.newInvites += diff;
         }
         this.setLoader(false);
         resolve(true);
       } catch (err) {
         console.error('Fetch invites :: ', err);
+        reject(err);
       }
     });
   }

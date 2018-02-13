@@ -40,7 +40,7 @@ export default class ChatRoom extends Component {
   }
 
   componentWillUnmount() {
-    clearTimeout(this.timer);
+    this.reset();
   }
 
   setTimer(fn) {
@@ -172,17 +172,24 @@ export default class ChatRoom extends Component {
       });
   }
 
+  reset() {
+    clearTimeout(this.timer);
+    this.props.store.resetConnInfo();
+  }
+
   endCall(e) {
     e.preventDefault();
     this.originConn.close();
     this.destConn.close();
     this.originConn = null;
     this.destConn = null;
+    this.reset();
     this.props.history.push('/');
   }
 
   onClickCancel(e) {
     e.preventDefault();
+    this.reset();
     this.props.history.push('/');
   }
 

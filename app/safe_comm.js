@@ -417,9 +417,10 @@ export default class SafeApi {
         const entriesHandle = await window.safeMutableData.getEntries(this.channelMD);
         await window.safeMutableDataEntries.forEach(entriesHandle, (k, v) => {
           const keyStr = k.toString();
+          console.log('v', keyStr, v);
           if (!whiteListKeys.includes(keyStr)) {
             const dataArr = keyStr.split(keySeparator);
-            if (dataArr.length == 3 && dataArr[1] === CONST.CONN_STATE.SEND_INVITE) {
+            if (dataArr.length == 3 && dataArr[1] === CONST.CONN_STATE.SEND_INVITE && v.buf.length !== 0) {
               invites.push({
                 publicId: dataArr[0],
                 uid: dataArr[2]
@@ -546,6 +547,35 @@ export default class SafeApi {
     });
   }
 
+  deleteInvite(connInfo) {
+    utils.putLog('Delete invite', connInfo);
+    return new Promise(async (resolve, reject) => {
+      try {
+        const isCaller = this._isCaller(connInfo);
+        if (isCaller) {
+          return reject(new Error('Restricted access'));
+        }
+        if (!this.channelMD) {
+          return reject(new Error('channel handle not set'));
+        }
+        const entriesHandle = await window.safeMutableData.getEntries(this.channelMD);
+        const mutationHandle = await window.safeMutableDataEntries.mutate(entriesHandle);
+
+        const dataKey = this._getDataKey(connInfo.data.initiater, CONST.CONN_STATE.SEND_INVITE, connInfo.uid);
+        const connStr = await window.safeMutableData.get(this.channelMD, dataKey);
+        await window.safeMutableDataMutation.remove(mutationHandle, dataKey, connStr.version + 1);
+
+        await window.safeMutableData.applyEntriesMutation(this.channelMD, mutationHandle);
+        window.safeMutableDataMutation.free(mutationHandle);
+        window.safeMutableDataEntries.free(entriesHandle);
+        resolve(true);
+      } catch (err) {
+        utils.putLog('Delete invite error', connInfo)
+        reject(err);
+      }
+    });
+  }
+
   sendInvite(connInfo) {
     utils.putLog('Send invite', connInfo);
     return new Promise(async (resolve, reject) => {
@@ -602,6 +632,7 @@ export default class SafeApi {
           return reject(new Error('channel handle is empty'));
         }
         await this.putConnInfo(connInfo);
+        await this.deleteInvite(connInfo);
         resolve(true);
       } catch (err) {
         utils.putLog('Connected error', err);
