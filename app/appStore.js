@@ -286,7 +286,7 @@ export default class AppStore {
       try {
 
         if (isPolling && !this.isAuthorised) {
-          resolve(true);
+          return resolve(true);
         }
 
         if (!isPolling) {
