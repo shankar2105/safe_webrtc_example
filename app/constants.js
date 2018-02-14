@@ -25,7 +25,7 @@ export default {
       offerToReceiveVideo: 1
     },
     MEDIA_OFFER: {
-      audio: false,
+      audio: true,
       video: true
     },
   },
