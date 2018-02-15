@@ -7,7 +7,11 @@ export default {
       INVITE_ACCEPTED: 'Invite accepted. Establishing connection with remote',
       CALLING: 'Remote accepted the invite. Establishing connection with remote',
     },
-    CONN_TIMER_INTERVAL: 2000
+    CONN_TIMER_INTERVAL: 2000,
+    TIMER_INTERVAL: {
+      FETCH_INVITES_POLL: 5000,
+      CONNECTION_POLL: 4000,
+    },
   },
   CONFIG: {
     SERVER: {

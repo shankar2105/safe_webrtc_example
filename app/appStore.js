@@ -34,7 +34,6 @@ export default class AppStore {
   constructor() {
     this.api = null;
     this.isAuthorised = false;
-    this.connInfo = null;
   }
 
   createUid() {
@@ -93,7 +92,7 @@ export default class AppStore {
 
   @action
   resetConnInfo() {
-    this.connInfo = null;
+    this.connectionState = CONST.CONN_STATE.INIT;
     this.uid = null;
     this.initiater = null;
     this.persona = null;
@@ -316,6 +315,8 @@ export default class AppStore {
       this.setLoader(true, `Activating selected ${pubName}`);
       this.selectedPubName = pubName;
       await this.api.setupPublicName(this.selectedPubName);
+      // reset invite count
+      this.newInvites = 0;
       this.setLoader(false, null, true);
     });
   }
@@ -432,5 +433,19 @@ export default class AppStore {
   @action
   resetFetchCount() {
     this.newInvites = 0;
+  }
+
+  @action
+  deleteInvite() {
+    return new Promise(async (resolve, reject) => {
+      try {
+        const connInfo = this.transformConnInfo();
+        await this.api.deleteInvite(connInfo);
+        return resolve(true);
+      } catch (err) {
+        console.log('Connected error :: ', err);
+        reject(err);
+      }
+    });
   }
 }

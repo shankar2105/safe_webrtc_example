@@ -63,11 +63,17 @@ export default class SafeApi {
         const secSignKeyStr = await window.safeMutableData.get(this.channelMD, CONST.CRYPTO_KEYS.SEC_SIGN_KEY);
         const pubEncKeyStr = await window.safeMutableData.get(this.channelMD, CONST.CRYPTO_KEYS.PUB_ENC_KEY);
         const secEncKeyStr = await window.safeMutableData.get(this.channelMD, CONST.CRYPTO_KEYS.SEC_ENC_KEY);
+        console.log('secSignKeyStr', secSignKeyStr)
+        const decSecSignKey = await window.safeMutableData.decrypt(this.channelMD, secSignKeyStr.buf);
+        const decSecEncKey = await window.safeMutableData.decrypt(this.channelMD, secEncKeyStr.buf);
+
+        console.log('decSecSignKey', decSecSignKey)
+        console.log('decSecEncKey', decSecEncKey)
 
         this.keys[CONST.CRYPTO_KEYS.PUB_SIGN_KEY] = await window.safeCrypto.pubSignKeyFromRaw(this.app, pubSignKeyStr.buf);
-        this.keys[CONST.CRYPTO_KEYS.SEC_SIGN_KEY] = await window.safeCrypto.secSignKeyFromRaw(this.app, secSignKeyStr.buf);
+        this.keys[CONST.CRYPTO_KEYS.SEC_SIGN_KEY] = await window.safeCrypto.secSignKeyFromRaw(this.app, decSecSignKey);
         this.keys[CONST.CRYPTO_KEYS.PUB_ENC_KEY] = await window.safeCrypto.pubEncKeyFromRaw(this.app, pubEncKeyStr.buf);
-        this.keys[CONST.CRYPTO_KEYS.SEC_ENC_KEY] = await window.safeCrypto.secEncKeyFromRaw(this.app, secEncKeyStr.buf);
+        this.keys[CONST.CRYPTO_KEYS.SEC_ENC_KEY] = await window.safeCrypto.secEncKeyFromRaw(this.app, decSecEncKey);
 
         utils.putLog('set origin keys from channel container', this.keys);
 
@@ -128,7 +134,9 @@ export default class SafeApi {
         const secSignKey = await window.safeCryptoSignKeyPair.getSecSignKey(signKeyPairHandle);
         keysHandle[CONST.CRYPTO_KEYS.SEC_SIGN_KEY] = secSignKey;
         const secSignKeyRaw = await window.safeCryptoSecSignKey.getRaw(secSignKey);
-        const secSignKeyArr = utils.bufToArr(secSignKeyRaw.buffer);
+        const encSecSignKey = await window.safeMutableData.encryptValue(this.channelMD, secSignKeyRaw.buffer);
+        console.log('encSecSignKey', encSecSignKey);
+        const secSignKeyArr = utils.bufToArr(encSecSignKey);
 
         utils.putLog('Generate Encvryption key pairs');
 
@@ -144,7 +152,9 @@ export default class SafeApi {
         const secEncKey = await window.safeCryptoEncKeyPair.getSecEncKey(encKeyPairHandle);
         keysHandle[CONST.CRYPTO_KEYS.SEC_ENC_KEY] = secEncKey;
         const secEncKeyRaw = await window.safeCryptoSecEncKey.getRaw(secEncKey);
-        const secEncKeyArr = utils.bufToArr(secEncKeyRaw.buffer);
+        const encSecEncKey = await window.safeMutableData.encryptValue(this.channelMD, secEncKeyRaw.buffer);
+        console.log('encSecEncKey', encSecEncKey);
+        const secEncKeyArr = utils.bufToArr(encSecEncKey);
 
         const entries = {};
         entries[CONST.CRYPTO_KEYS.PUB_SIGN_KEY] = pubSignKeyArr;

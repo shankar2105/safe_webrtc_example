@@ -60,7 +60,7 @@ export default class ChatRoom extends Component {
           this.finishConnection();
         }
       });
-    }, CONST.UI.CONN_TIMER_INTERVAL);
+    }, CONST.UI.TIMER_INTERVAL.CONNECTION_POLL);
   }
 
   startStream() {
@@ -189,8 +189,14 @@ export default class ChatRoom extends Component {
 
   onClickCancel(e) {
     e.preventDefault();
+    const self = this;
+    const moveHome = () => {
+      console.log('moveHome');
+      self.props.history.push('/');
+    };
     this.reset();
-    this.props.history.push('/');
+    this.props.store.deleteInvite()
+      .then(moveHome, moveHome);
   }
 
   getConnectionStatus() {
@@ -199,6 +205,7 @@ export default class ChatRoom extends Component {
     const { CONN_STATE, UI } = CONST;
     const { CONN_MSGS } = UI;
 
+    // FIXME check for not caller persona
     if (connectionState === CONN_STATE.CONNECTED) {
       this.finishConnection();
       return;

@@ -41,7 +41,7 @@ export default class Home extends Component {
     };
     this.timer = setTimeout(() => {
       store.fetchInvites(true).then(poll, poll);
-    }, CONST.UI.CONN_TIMER_INTERVAL);
+    }, CONST.UI.TIMER_INTERVAL.FETCH_INVITES_POLL);
   }
 
   render() {
