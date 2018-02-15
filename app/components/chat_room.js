@@ -192,11 +192,11 @@ export default class ChatRoom extends Component {
     const self = this;
     const moveHome = () => {
       console.log('moveHome');
+      self.reset();
       self.props.history.push('/');
     };
-    this.reset();
     this.props.store.deleteInvite()
-      .then(moveHome, moveHome);
+    .then(moveHome, moveHome);
   }
 
   getConnectionStatus() {
