@@ -59,19 +59,10 @@ export default class SafeApi {
         return reject(new Error('Channel MD not set'));
       }
       try {
-        const pubSignKeyStr = await window.safeMutableData.get(this.channelMD, CONST.CRYPTO_KEYS.PUB_SIGN_KEY);
-        const secSignKeyStr = await window.safeMutableData.get(this.channelMD, CONST.CRYPTO_KEYS.SEC_SIGN_KEY);
         const pubEncKeyStr = await window.safeMutableData.get(this.channelMD, CONST.CRYPTO_KEYS.PUB_ENC_KEY);
         const secEncKeyStr = await window.safeMutableData.get(this.channelMD, CONST.CRYPTO_KEYS.SEC_ENC_KEY);
-        console.log('secSignKeyStr', secSignKeyStr)
-        const decSecSignKey = await window.safeMutableData.decrypt(this.channelMD, secSignKeyStr.buf);
         const decSecEncKey = await window.safeMutableData.decrypt(this.channelMD, secEncKeyStr.buf);
 
-        console.log('decSecSignKey', decSecSignKey)
-        console.log('decSecEncKey', decSecEncKey)
-
-        this.keys[CONST.CRYPTO_KEYS.PUB_SIGN_KEY] = await window.safeCrypto.pubSignKeyFromRaw(this.app, pubSignKeyStr.buf);
-        this.keys[CONST.CRYPTO_KEYS.SEC_SIGN_KEY] = await window.safeCrypto.secSignKeyFromRaw(this.app, decSecSignKey);
         this.keys[CONST.CRYPTO_KEYS.PUB_ENC_KEY] = await window.safeCrypto.pubEncKeyFromRaw(this.app, pubEncKeyStr.buf);
         this.keys[CONST.CRYPTO_KEYS.SEC_ENC_KEY] = await window.safeCrypto.secEncKeyFromRaw(this.app, decSecEncKey);
 
@@ -93,10 +84,8 @@ export default class SafeApi {
         return reject(new Error('Channel MD not set'));
       }
       try {
-        const pubSignKeyStr = await window.safeMutableData.get(this.remoteChannelMD, CONST.CRYPTO_KEYS.PUB_SIGN_KEY);
         const pubEncKeyStr = await window.safeMutableData.get(this.remoteChannelMD, CONST.CRYPTO_KEYS.PUB_ENC_KEY);
 
-        this.remoteKeys[CONST.CRYPTO_KEYS.PUB_SIGN_KEY] = await window.safeCrypto.pubSignKeyFromRaw(this.app, pubSignKeyStr.buf);
         this.remoteKeys[CONST.CRYPTO_KEYS.PUB_ENC_KEY] = await window.safeCrypto.pubEncKeyFromRaw(this.app, pubEncKeyStr.buf);
         utils.putLog('set remote keys from remote channel', this.remoteKeys);
         resolve(true);
@@ -119,25 +108,7 @@ export default class SafeApi {
         this.channelMD = await window.safeMutableData.newRandomPrivate(this.app, CONST.TYPE_TAG.CHANNEL);
         const keysHandle = {};
 
-        utils.putLog('Generate Sign key pairs');
-
-        // Application keys
-        const signKeyPairHandle = await window.safeCrypto.generateSignKeyPair(this.app);
-
-        // public sign key
-        const pubSignKey = await window.safeCryptoSignKeyPair.getPubSignKey(signKeyPairHandle);
-        keysHandle[CONST.CRYPTO_KEYS.PUB_SIGN_KEY] = pubSignKey;
-        const pubSignKeyRaw = await window.safeCryptoPubSignKey.getRaw(pubSignKey);
-        const pubSignKeyArr = utils.bufToArr(pubSignKeyRaw.buffer);
-
-        // secret sign key
-        const secSignKey = await window.safeCryptoSignKeyPair.getSecSignKey(signKeyPairHandle);
-        keysHandle[CONST.CRYPTO_KEYS.SEC_SIGN_KEY] = secSignKey;
-        const secSignKeyRaw = await window.safeCryptoSecSignKey.getRaw(secSignKey);
-        const encSecSignKey = await window.safeMutableData.encryptValue(this.channelMD, secSignKeyRaw.buffer);
-        console.log('encSecSignKey', encSecSignKey);
-        const secSignKeyArr = utils.bufToArr(encSecSignKey);
-
+        utils.putLog('Generate Encvryption key pairs');
         utils.putLog('Generate Encvryption key pairs');
 
         const encKeyPairHandle = await window.safeCrypto.generateEncKeyPair(this.app);
@@ -153,12 +124,9 @@ export default class SafeApi {
         keysHandle[CONST.CRYPTO_KEYS.SEC_ENC_KEY] = secEncKey;
         const secEncKeyRaw = await window.safeCryptoSecEncKey.getRaw(secEncKey);
         const encSecEncKey = await window.safeMutableData.encryptValue(this.channelMD, secEncKeyRaw.buffer);
-        console.log('encSecEncKey', encSecEncKey);
         const secEncKeyArr = utils.bufToArr(encSecEncKey);
 
         const entries = {};
-        entries[CONST.CRYPTO_KEYS.PUB_SIGN_KEY] = pubSignKeyArr;
-        entries[CONST.CRYPTO_KEYS.SEC_SIGN_KEY] = secSignKeyArr;
         entries[CONST.CRYPTO_KEYS.PUB_ENC_KEY] = pubEncKeyArr;
         entries[CONST.CRYPTO_KEYS.SEC_ENC_KEY] = secEncKeyArr;
         await window.safeMutableData.quickSetup(this.channelMD, entries, 'WebRTC Channel', `WebRTC channel for ${hostName}`);
@@ -419,15 +387,12 @@ export default class SafeApi {
         const whiteListKeys = [
           CONST.CRYPTO_KEYS.PUB_ENC_KEY,
           CONST.CRYPTO_KEYS.SEC_ENC_KEY,
-          CONST.CRYPTO_KEYS.PUB_SIGN_KEY,
-          CONST.CRYPTO_KEYS.SEC_SIGN_KEY,
           CONST.MD_META_KEY
         ];
         const invites = [];
         const entriesHandle = await window.safeMutableData.getEntries(this.channelMD);
         await window.safeMutableDataEntries.forEach(entriesHandle, (k, v) => {
           const keyStr = k.toString();
-          console.log('v', keyStr, v);
           if (!whiteListKeys.includes(keyStr)) {
             const dataArr = keyStr.split(keySeparator);
             if (dataArr.length == 3 && dataArr[1] === CONST.CONN_STATE.SEND_INVITE && v.buf.length !== 0) {

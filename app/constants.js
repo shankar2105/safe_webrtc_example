@@ -66,8 +66,6 @@ export default {
     NO_SUCH_ENTRY: -106,
   },
   CRYPTO_KEYS: {
-    SEC_SIGN_KEY: '__SEC_SIGN_KEY__',
-    PUB_SIGN_KEY: '__PUB_SIGN_KEY__',
     SEC_ENC_KEY: '__SEC_ENC_KEY__',
     PUB_ENC_KEY: '__PUB_ENC_KEY__',
   },

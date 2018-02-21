@@ -1,7 +1,6 @@
 import { observable, transaction, isObservable, extendObservable, action, autorun, ObservableMap } from 'mobx';
 import 'babel-polyfill';
 
-import ConnModel from './models/connection';
 import CONST from './constants';
 import SafeApi from './safe_comm';
 
@@ -84,11 +83,6 @@ export default class AppStore {
     obj.callee['answerCandidates'] = data.callee.answerCandidates;
     return obj;
   }
-
-  // @action
-  // timeout(ms) {
-  //   return new Promise((resolve) => setTimeout(resolve, ms));
-  // }
 
   @action
   resetConnInfo() {
